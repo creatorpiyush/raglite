@@ -1,5 +1,5 @@
 {
-  "name": "raglite",
+  "name": "raglite-toolkit",
   "version": "1.0.0",
   "description": "Build semantic search, multi-provider question answering, and REST APIs over your documents in a few lines of TypeScript.",
   "type": "module",
