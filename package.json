@@ -1,0 +1,108 @@
+{
+  "name": "raglite",
+  "version": "1.0.0",
+  "description": "Build semantic search, multi-provider question answering, and REST APIs over your documents in a few lines of TypeScript.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "raglite": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "postbuild": "node -e \"import('node:fs').then(({chmodSync}) => chmodSync('dist/cli.js', 0o755))\"",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist coverage",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "biome lint .",
+    "lint:fix": "biome lint --write .",
+    "format": "biome format --write .",
+    "check": "biome check --write .",
+    "verify": "npm run typecheck && npm run lint && npm run test",
+    "example:basic": "tsx examples/basic.ts",
+    "example:serve": "tsx examples/serve.ts",
+    "example:multi": "tsx examples/multi-provider.ts",
+    "prepack": "npm run clean && npm run build",
+    "prepublishOnly": "npm run verify"
+  },
+  "keywords": [
+    "rag",
+    "retrieval-augmented-generation",
+    "semantic-search",
+    "embeddings",
+    "vector-search",
+    "vector-database",
+    "llm",
+    "openai",
+    "anthropic",
+    "gemini",
+    "mistral",
+    "cohere",
+    "groq",
+    "ollama",
+    "typescript",
+    "hono",
+    "ai",
+    "chatbot",
+    "question-answering"
+  ],
+  "author": "Piyush Anand",
+  "license": "MIT",
+  "homepage": "https://github.com/OWNER/raglite#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/OWNER/raglite.git"
+  },
+  "bugs": {
+    "url": "https://github.com/OWNER/raglite/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=18.17.0"
+  },
+  "dependencies": {
+    "@ai-sdk/anthropic": "^4.0.15",
+    "@ai-sdk/cohere": "^4.0.10",
+    "@ai-sdk/google": "^4.0.16",
+    "@ai-sdk/groq": "^4.0.11",
+    "@ai-sdk/mistral": "^4.0.11",
+    "@ai-sdk/openai": "^4.0.14",
+    "@ai-sdk/xai": "^4.0.13",
+    "@hono/node-server": "^2.0.9",
+    "ai": "^7.0.28",
+    "hono": "^4.12.30",
+    "mammoth": "^1.12.0",
+    "ollama-ai-provider-v2": "^4.0.1",
+    "unpdf": "^1.6.2",
+    "voyage-ai-provider": "^4.0.0",
+    "zod": "^4.4.3"
+  },
+  "optionalDependencies": {
+    "@huggingface/transformers": "^4.2.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.4",
+    "@types/node": "^22.7.0",
+    "@vitest/coverage-v8": "^4.1.10",
+    "tsx": "^4.23.1",
+    "typescript": "^5.6.0",
+    "vitest": "^4.1.10"
+  }
+}
