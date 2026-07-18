@@ -1,5 +1,5 @@
 import { performance } from "node:perf_hooks";
-import { Document } from "../dist/index.js";
+import { Document } from "../src/index.js";
 
 const OLLAMA_URL = process.env["OLLAMA_URL"] ?? "http://localhost:11434/api";
 const EMBED_MODEL = process.env["OLLAMA_EMBED_MODEL"] ?? "embeddinggemma:latest";
