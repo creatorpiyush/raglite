@@ -1,4 +1,4 @@
-# raglite
+# raglite-toolkit
 
 Build semantic search, multi-provider question answering, and REST APIs over your documents in a few lines of TypeScript.
 
@@ -15,7 +15,7 @@ Build semantic search, multi-provider question answering, and REST APIs over you
 ## Install
 
 ```bash
-npm install raglite
+npm install raglite-toolkit
 ```
 
 Provider SDKs are pulled in on demand. For local (offline) embeddings:
@@ -27,7 +27,7 @@ npm install @huggingface/transformers
 ## Quick start
 
 ```ts
-import { Document } from "raglite";
+import { Document } from "raglite-toolkit";
 
 const doc = new Document("./policy.pdf", {
   embeddings: { provider: "openai", apiKey: process.env.OPENAI_API_KEY },
