@@ -97,6 +97,9 @@
   "optionalDependencies": {
     "@huggingface/transformers": "^4.2.0"
   },
+  "overrides": {
+    "adm-zip": "0.6.0"
+  },
   "devDependencies": {
     "@biomejs/biome": "^2.5.4",
     "@types/node": "^22.7.0",
