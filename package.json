@@ -63,13 +63,13 @@
   ],
   "author": "Piyush Anand",
   "license": "MIT",
-  "homepage": "https://github.com/OWNER/raglite#readme",
+  "homepage": "https://github.com/creatorpiyush/raglite#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/OWNER/raglite.git"
+    "url": "git+https://github.com/creatorpiyush/raglite.git"
   },
   "bugs": {
-    "url": "https://github.com/OWNER/raglite/issues"
+    "url": "https://github.com/creatorpiyush/raglite/issues"
   },
   "publishConfig": {
     "access": "public"
