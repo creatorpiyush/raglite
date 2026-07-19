@@ -24,7 +24,7 @@ import type {
 } from "../types.js";
 import { hashFile, namespaceFromPath } from "../utils/hash.js";
 import { createLogger, type Logger } from "../utils/logger.js";
-import { MemoryVectorStore } from "../vectordb/index.js";
+import { createVectorStore, type VectorStore } from "../vectordb/index.js";
 
 export interface IndexOptions {
   chunkSize?: number;
@@ -68,7 +68,7 @@ export class Document {
   private readonly namespace: string;
   private readonly config: ResolvedConfig;
   private readonly logger: Logger;
-  private readonly store: MemoryVectorStore;
+  private readonly store: VectorStore;
 
   private embedder: Embedder | null = null;
   private ready = false;
@@ -78,7 +78,12 @@ export class Document {
     this.config = resolveConfig(options);
     this.logger = createLogger(this.config.logLevel);
     this.namespace = namespaceFromPath(this.filePath);
-    this.store = new MemoryVectorStore(this.config.storeDir, this.namespace);
+
+    if (typeof this.config.vectorStore === "object" && "provider" in this.config.vectorStore) {
+      this.store = createVectorStore(this.config.vectorStore, this.namespace);
+    } else {
+      this.store = this.config.vectorStore;
+    }
   }
 
   /**
@@ -261,7 +266,7 @@ export class Document {
   }
 
   /** Underlying vector store (advanced use). */
-  get vectorStore(): MemoryVectorStore {
+  get vectorStore(): VectorStore {
     return this.store;
   }
 

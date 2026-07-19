@@ -19,6 +19,7 @@ describe("resolveConfig", () => {
     expect(c.embeddings.provider).toBe("local");
     expect(c.llm).toBeUndefined();
     expect(c.logLevel).toBe("info");
+    expect(c.vectorStore).toEqual({ provider: "memory", storeDir: DEFAULT_STORE_DIRNAME });
   });
 
   it("respects user overrides", () => {
@@ -31,6 +32,7 @@ describe("resolveConfig", () => {
       logLevel: "debug",
       embeddings: { provider: "openai", apiKey: "sk-x" },
       llm: { provider: "anthropic", apiKey: "ak-x" },
+      vectorStore: { provider: "qdrant", url: "http://localhost:6333" },
     });
     expect(c.chunkSize).toBe(200);
     expect(c.overlap).toBe(25);
@@ -40,5 +42,6 @@ describe("resolveConfig", () => {
     expect(c.logLevel).toBe("debug");
     expect(c.embeddings.provider).toBe("openai");
     expect(c.llm?.provider).toBe("anthropic");
+    expect(c.vectorStore).toEqual({ provider: "qdrant", url: "http://localhost:6333" });
   });
 });

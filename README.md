@@ -86,6 +86,68 @@ await doc.build();
 console.log((await doc.ask("What is the refund policy?")).text);
 ```
 
+## Pluggable Vector Databases
+
+By default, `raglite` uses a lightweight, in-memory vector store that persists indexes locally as JSON files. You can configure `raglite` to use a custom local or cloud-based vector database (like Qdrant, Pinecone, or LanceDB) by passing the `vectorStore` configuration option:
+
+### Memory Store (Default)
+```ts
+const doc = new Document("./policy.pdf", {
+  vectorStore: { provider: "memory", storeDir: ".raglite" }
+});
+```
+
+### Qdrant (Local or Cloud)
+Supports both local instances (e.g. running via Docker) and Qdrant Cloud clusters.
+```ts
+const doc = new Document("./policy.pdf", {
+  vectorStore: {
+    provider: "qdrant",
+    url: "http://localhost:6333", // or Qdrant Cloud URL
+    apiKey: "your-qdrant-api-key", // optional
+    indexName: "my_collection"   // optional
+  }
+});
+```
+
+### Pinecone (Cloud)
+`raglite` automatically scopes document collections under Pinecone's native namespaces inside the index.
+```ts
+const doc = new Document("./policy.pdf", {
+  vectorStore: {
+    provider: "pinecone",
+    url: "https://your-pinecone-index-host.svc.pinecone.io",
+    apiKey: "your-pinecone-api-key"
+  }
+});
+```
+
+### LanceDB (Local)
+Runs a high-performance local database on the filesystem.
+```ts
+const doc = new Document("./policy.pdf", {
+  vectorStore: {
+    provider: "lancedb",
+    storeDir: ".raglite"
+  }
+});
+```
+
+### Custom Vector Store Class
+You can also supply your own custom class instance directly as long as it implements the `VectorStore` interface:
+```ts
+import { VectorStore } from "raglite-toolkit";
+
+class MyCustomStore implements VectorStore {
+  // Implement methods: load, reset, add, search, count, saveIndexMetadata, readIndexMetadata
+}
+
+const doc = new Document("./policy.pdf", {
+  vectorStore: new MyCustomStore()
+});
+```
+
+
 ## Streaming
 
 ```ts
