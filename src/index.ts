@@ -73,6 +73,14 @@ export type {
   LLMProviderName,
   SearchResult,
   StoredChunk,
+  VectorStoreProviderConfig,
+  VectorStoreProviderName,
 } from "./types.js";
 export type { VectorSearchHit, VectorStore } from "./vectordb/index.js";
-export { MemoryVectorStore } from "./vectordb/index.js";
+export {
+  createVectorStore,
+  LanceDbVectorStore,
+  MemoryVectorStore,
+  PineconeVectorStore,
+  QdrantVectorStore,
+} from "./vectordb/index.js";

@@ -67,3 +67,13 @@ export interface IndexMetadata {
   chunkCount: number;
   createdAt: string;
 }
+
+export type VectorStoreProviderName = "memory" | "qdrant" | "pinecone" | "lancedb";
+
+export interface VectorStoreProviderConfig {
+  provider: VectorStoreProviderName;
+  storeDir?: string;
+  url?: string;
+  apiKey?: string;
+  indexName?: string;
+}

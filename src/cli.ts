@@ -7,21 +7,28 @@ import type {
   EmbeddingProviderName,
   LLMProviderConfig,
   LLMProviderName,
+  VectorStoreProviderConfig,
+  VectorStoreProviderName,
 } from "./types.js";
 
 const HELP = `raglite v${PACKAGE_VERSION}
 
 Usage:
   raglite index <file>   [--chunk-size N] [--overlap N] [--embed-provider P] [--embed-model M] [--embed-key K] [--rebuild]
+                         [--vector-provider P] [--vector-url U] [--vector-key K] [--vector-index I] [--vector-store-dir D]
   raglite search <file> "query"   [--top-k N]
+                         [--vector-provider P] [--vector-url U] [--vector-key K] [--vector-index I] [--vector-store-dir D]
   raglite ask <file> "question"   --llm-provider P [--llm-model M] [--llm-key K] [--stream]
+                         [--vector-provider P] [--vector-url U] [--vector-key K] [--vector-index I] [--vector-store-dir D]
   raglite serve <file>            --llm-provider P [--llm-key K] [--host H] [--port N] [--token T]
+                         [--vector-provider P] [--vector-url U] [--vector-key K] [--vector-index I] [--vector-store-dir D]
   raglite --help
   raglite --version
 
 Providers:
   LLM:        openai, anthropic, google, mistral, cohere, groq, xai, ollama
   Embeddings: openai, google, mistral, cohere, voyage, ollama, local
+  Vector DB:  memory, qdrant, pinecone, lancedb
 `;
 
 async function main(): Promise<void> {
@@ -72,6 +79,27 @@ function parseLLM(values: Record<string, unknown>): LLMProviderConfig | undefine
   return config;
 }
 
+function parseVectorStore(values: Record<string, unknown>): VectorStoreProviderConfig | undefined {
+  const provider = values["vector-provider"] as string | undefined;
+  if (!provider) return undefined;
+  const config: VectorStoreProviderConfig = {
+    provider: provider as VectorStoreProviderName,
+  };
+  if (values["vector-url"]) config.url = values["vector-url"] as string;
+  if (values["vector-key"]) config.apiKey = values["vector-key"] as string;
+  if (values["vector-index"]) config.indexName = values["vector-index"] as string;
+  if (values["vector-store-dir"]) config.storeDir = values["vector-store-dir"] as string;
+  return config;
+}
+
+const COMMON_VECTOR_OPTIONS = {
+  "vector-provider": { type: "string" },
+  "vector-url": { type: "string" },
+  "vector-key": { type: "string" },
+  "vector-index": { type: "string" },
+  "vector-store-dir": { type: "string" },
+} as const;
+
 async function runIndex(args: string[]): Promise<void> {
   const { values, positionals } = parseArgs({
     args,
@@ -83,11 +111,15 @@ async function runIndex(args: string[]): Promise<void> {
       "embed-model": { type: "string" },
       "embed-key": { type: "string" },
       rebuild: { type: "boolean" },
+      ...COMMON_VECTOR_OPTIONS,
     },
   });
   const file = requirePositional(positionals, 0, "file");
 
-  const doc = new Document(file, { embeddings: parseCommonEmbedding(values) });
+  const doc = new Document(file, {
+    embeddings: parseCommonEmbedding(values),
+    vectorStore: parseVectorStore(values),
+  });
   const result = await doc.build({
     ...(values["chunk-size"] ? { chunkSize: Number(values["chunk-size"]) } : {}),
     ...(values.overlap ? { overlap: Number(values.overlap) } : {}),
@@ -105,12 +137,16 @@ async function runSearch(args: string[]): Promise<void> {
       "embed-provider": { type: "string" },
       "embed-model": { type: "string" },
       "embed-key": { type: "string" },
+      ...COMMON_VECTOR_OPTIONS,
     },
   });
   const file = requirePositional(positionals, 0, "file");
   const query = requirePositional(positionals, 1, "query");
 
-  const doc = new Document(file, { embeddings: parseCommonEmbedding(values) });
+  const doc = new Document(file, {
+    embeddings: parseCommonEmbedding(values),
+    vectorStore: parseVectorStore(values),
+  });
   const results = await doc.search(query, {
     ...(values["top-k"] ? { topK: Number(values["top-k"]) } : {}),
   });
@@ -130,6 +166,7 @@ async function runAsk(args: string[]): Promise<void> {
       "llm-model": { type: "string" },
       "llm-key": { type: "string" },
       stream: { type: "boolean" },
+      ...COMMON_VECTOR_OPTIONS,
     },
   });
   const file = requirePositional(positionals, 0, "file");
@@ -137,7 +174,11 @@ async function runAsk(args: string[]): Promise<void> {
 
   const llm = parseLLM(values);
   if (!llm) throw new Error("--llm-provider is required for `ask`");
-  const doc = new Document(file, { embeddings: parseCommonEmbedding(values), llm });
+  const doc = new Document(file, {
+    embeddings: parseCommonEmbedding(values),
+    llm,
+    vectorStore: parseVectorStore(values),
+  });
 
   const opts: Parameters<Document["ask"]>[1] = {};
   if (values["top-k"]) opts.topK = Number(values["top-k"]);
@@ -167,6 +208,7 @@ async function runServe(args: string[]): Promise<void> {
       host: { type: "string" },
       port: { type: "string" },
       token: { type: "string" },
+      ...COMMON_VECTOR_OPTIONS,
     },
   });
   const file = requirePositional(positionals, 0, "file");
@@ -174,6 +216,7 @@ async function runServe(args: string[]): Promise<void> {
   const doc = new Document(file, {
     embeddings: parseCommonEmbedding(values),
     ...(llm ? { llm } : {}),
+    vectorStore: parseVectorStore(values),
   });
   await doc.build();
 
