@@ -1,6 +1,6 @@
 {
   "name": "raglite-toolkit",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Build semantic search, multi-provider question answering, and REST APIs over your documents in a few lines of TypeScript.",
   "type": "module",
   "main": "./dist/index.js",
@@ -39,6 +39,7 @@
     "example:multi": "tsx examples/multi-provider.ts",
     "example:lancedb": "tsx examples/lancedb-example.ts",
     "example:qdrant": "tsx examples/qdrant-example.ts",
+    "example:collection": "tsx examples/collection-demo.ts",
     "prepack": "npm run clean && npm run build",
     "prepublishOnly": "npm run verify"
   },

@@ -12,7 +12,7 @@ import {
   type PromptOptions,
   streamAnswer,
 } from "../llm/index.js";
-import { getLoader } from "../loaders/index.js";
+import { getLoader, isUrl } from "../loaders/index.js";
 import { Retriever } from "../retrieval/index.js";
 import type {
   ChunkMetadata,
@@ -22,7 +22,7 @@ import type {
   SearchResult,
   StoredChunk,
 } from "../types.js";
-import { hashFile, namespaceFromPath } from "../utils/hash.js";
+import { hashFile, hashString, namespaceFromPath } from "../utils/hash.js";
 import { createLogger, type Logger } from "../utils/logger.js";
 import { createVectorStore, type VectorStore } from "../vectordb/index.js";
 
@@ -74,7 +74,7 @@ export class Document {
   private ready = false;
 
   constructor(filePath: string, options: DocumentOptions = {}) {
-    this.filePath = resolve(filePath);
+    this.filePath = isUrl(filePath) ? filePath : resolve(filePath);
     this.config = resolveConfig(options);
     this.logger = createLogger(this.config.logLevel);
     this.namespace = namespaceFromPath(this.filePath);
@@ -90,7 +90,7 @@ export class Document {
    * Build (or reuse) the semantic index for this document.
    */
   async build(options: IndexOptions = {}): Promise<IndexBuildResult> {
-    if (!existsSync(this.filePath)) {
+    if (!isUrl(this.filePath) && !existsSync(this.filePath)) {
       throw new LoaderError(`File does not exist: ${this.filePath}`);
     }
 
@@ -100,7 +100,9 @@ export class Document {
 
     await this.store.load();
     const existing = await this.store.readIndexMetadata();
-    const sourceHash = await hashFile(this.filePath);
+    const sourceHash = isUrl(this.filePath)
+      ? hashString(this.filePath)
+      : await hashFile(this.filePath);
 
     if (
       !options.rebuild &&
@@ -149,7 +151,7 @@ export class Document {
       );
     }
 
-    const source = basename(this.filePath);
+    const source = isUrl(this.filePath) ? this.filePath : basename(this.filePath);
     const stored: StoredChunk[] = chunks.map((text, index) => {
       const metadata: ChunkMetadata = {
         source,

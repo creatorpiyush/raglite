@@ -1,8 +1,9 @@
 # raglite-toolkit
 
-Build semantic search, multi-provider question answering, and REST APIs over your documents in a few lines of TypeScript.
+Build semantic search, multi-provider question answering, and REST APIs over your documents, directories, or web URLs in a few lines of TypeScript.
 
 - **PDF, TXT, JSON, Markdown, DOCX** loaders out of the box
+- **Multi-document, directory, & URL ingestion** — index folders, glob patterns, or web URLs with `DocumentCollection`
 - **Multi-provider LLMs** — OpenAI, Anthropic (Claude), Google (Gemini), Mistral, Cohere, Groq, xAI (Grok), Ollama
 - **Multi-provider embeddings** — OpenAI, Google, Mistral, Cohere, Voyage, Ollama, or a **local** sentence-transformer
 - **Cosine similarity** scoring with L2-normalized vectors
@@ -39,6 +40,30 @@ await doc.build();
 const hits = await doc.search("refund policy", { topK: 3 });
 
 const answer = await doc.ask("What is the refund policy?");
+console.log(answer.text);
+```
+
+## Multi-Document & Directory Ingestion (`DocumentCollection`)
+
+Index entire directories (`./docs`), glob patterns, web URLs, or mixed file arrays seamlessly:
+
+```ts
+import { DocumentCollection } from "raglite-toolkit";
+
+const collection = new DocumentCollection(["./docs", "https://example.com"], {
+  embeddings: { provider: "local" },
+  llm: { provider: "openai", apiKey: process.env.OPENAI_API_KEY },
+});
+
+// Concurrently index all documents in directory & web URLs
+const result = await collection.build();
+console.log(`Indexed ${result.totalDocuments} document(s), ${result.totalChunks} chunk(s).`);
+
+// Search across all collection documents simultaneously
+const hits = await collection.search("refund policy", { topK: 5 });
+
+// Contextual Q&A across the entire collection
+const answer = await collection.ask("What is the refund policy?");
 console.log(answer.text);
 ```
 
@@ -147,7 +172,6 @@ const doc = new Document("./policy.pdf", {
 });
 ```
 
-
 ## Streaming
 
 ```ts
@@ -203,10 +227,10 @@ curl -X POST http://127.0.0.1:8085/ask \
 
 ```bash
 raglite index ./policy.pdf --embed-provider openai --embed-key $OPENAI_API_KEY
-raglite search ./policy.pdf "refund policy" --top-k 3
-raglite ask ./policy.pdf "What is the refund policy?" \
+raglite search ./docs "refund policy" --top-k 3
+raglite ask ./docs "What is the refund policy?" \
   --llm-provider anthropic --llm-key $ANTHROPIC_API_KEY --stream
-raglite serve ./policy.pdf \
+raglite serve https://example.com \
   --llm-provider openai --llm-key $OPENAI_API_KEY \
   --port 8085 --token $RAGLITE_TOKEN
 ```
@@ -253,26 +277,6 @@ new Document(path, {
 });
 ```
 
-## How the index cache works
-
-Every call to `build()` fingerprints the source file with a **SHA-256 content hash** (not mtime) and stores it alongside the vectors. The next call reuses the cached index only if all of these match:
-
-- file content hash
-- chunk size and overlap
-- embedding provider (and model, if you passed one)
-- library major version
-
-Change any of them (or pass `rebuild: true`) and the index is rebuilt.
-
-Each `Document` is scoped to its own directory under `.raglite/<sha256-prefix>/`, so multiple documents never overwrite each other.
-
-## Advanced
-
-- **Custom vector store.** Implement the `VectorStore` interface in `raglite/vectordb`.
-- **Custom loader.** Extend `BaseLoader` and register it before calling `getLoader`.
-- **Custom chunker.** Extend `BaseChunker`.
-- **Raw AI SDK access.** `createLLM({...})` returns a `LanguageModel` you can use with `generateText` / `streamText` directly.
-
 ## Development
 
 ```bash
@@ -280,14 +284,10 @@ npm install          # install dependencies
 npm run typecheck    # tsc --noEmit
 npm run lint         # biome lint
 npm run format       # biome format --write
-npm test             # vitest run  (71 tests, ~1s)
-npm run test:watch   # vitest in watch mode
-npm run test:coverage
+npm test             # vitest run
 npm run verify       # typecheck + lint + tests (runs on prepublishOnly)
 npm run build        # emit dist/
 ```
-
-The test suite (13 files, 71 tests, ~1 s) does not require network access; it uses a deterministic `MockEmbedder` and mocks the AI SDK so unit + integration tests can validate the pipeline end-to-end offline.
 
 ## License
 

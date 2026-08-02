@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { parseArgs } from "node:util";
 import { PACKAGE_VERSION } from "./constants.js";
-import { Document } from "./core/document.js";
+import { DocumentCollection } from "./core/collection.js";
 import type {
   EmbeddingProviderConfig,
   EmbeddingProviderName,
@@ -14,14 +14,14 @@ import type {
 const HELP = `raglite v${PACKAGE_VERSION}
 
 Usage:
-  raglite index <file>   [--chunk-size N] [--overlap N] [--embed-provider P] [--embed-model M] [--embed-key K] [--rebuild]
-                         [--vector-provider P] [--vector-url U] [--vector-key K] [--vector-index I] [--vector-store-dir D]
-  raglite search <file> "query"   [--top-k N]
-                         [--vector-provider P] [--vector-url U] [--vector-key K] [--vector-index I] [--vector-store-dir D]
-  raglite ask <file> "question"   --llm-provider P [--llm-model M] [--llm-key K] [--stream]
-                         [--vector-provider P] [--vector-url U] [--vector-key K] [--vector-index I] [--vector-store-dir D]
-  raglite serve <file>            --llm-provider P [--llm-key K] [--host H] [--port N] [--token T]
-                         [--vector-provider P] [--vector-url U] [--vector-key K] [--vector-index I] [--vector-store-dir D]
+  raglite index <path|url>   [--chunk-size N] [--overlap N] [--embed-provider P] [--embed-model M] [--embed-key K] [--rebuild]
+                             [--vector-provider P] [--vector-url U] [--vector-key K] [--vector-index I] [--vector-store-dir D]
+  raglite search <path|url> "query"   [--top-k N]
+                             [--vector-provider P] [--vector-url U] [--vector-key K] [--vector-index I] [--vector-store-dir D]
+  raglite ask <path|url> "question"   --llm-provider P [--llm-model M] [--llm-key K] [--stream]
+                             [--vector-provider P] [--vector-url U] [--vector-key K] [--vector-index I] [--vector-store-dir D]
+  raglite serve <path|url>            --llm-provider P [--llm-key K] [--host H] [--port N] [--token T]
+                             [--vector-provider P] [--vector-url U] [--vector-key K] [--vector-index I] [--vector-store-dir D]
   raglite --help
   raglite --version
 
@@ -114,13 +114,13 @@ async function runIndex(args: string[]): Promise<void> {
       ...COMMON_VECTOR_OPTIONS,
     },
   });
-  const file = requirePositional(positionals, 0, "file");
+  const pathOrUrl = requirePositional(positionals, 0, "path|url");
 
-  const doc = new Document(file, {
+  const collection = new DocumentCollection(pathOrUrl, {
     embeddings: parseCommonEmbedding(values),
     vectorStore: parseVectorStore(values),
   });
-  const result = await doc.build({
+  const result = await collection.build({
     ...(values["chunk-size"] ? { chunkSize: Number(values["chunk-size"]) } : {}),
     ...(values.overlap ? { overlap: Number(values.overlap) } : {}),
     ...(values.rebuild ? { rebuild: true } : {}),
@@ -140,14 +140,14 @@ async function runSearch(args: string[]): Promise<void> {
       ...COMMON_VECTOR_OPTIONS,
     },
   });
-  const file = requirePositional(positionals, 0, "file");
+  const pathOrUrl = requirePositional(positionals, 0, "path|url");
   const query = requirePositional(positionals, 1, "query");
 
-  const doc = new Document(file, {
+  const collection = new DocumentCollection(pathOrUrl, {
     embeddings: parseCommonEmbedding(values),
     vectorStore: parseVectorStore(values),
   });
-  const results = await doc.search(query, {
+  const results = await collection.search(query, {
     ...(values["top-k"] ? { topK: Number(values["top-k"]) } : {}),
   });
   process.stdout.write(`${JSON.stringify(results, null, 2)}\n`);
@@ -169,27 +169,27 @@ async function runAsk(args: string[]): Promise<void> {
       ...COMMON_VECTOR_OPTIONS,
     },
   });
-  const file = requirePositional(positionals, 0, "file");
+  const pathOrUrl = requirePositional(positionals, 0, "path|url");
   const question = requirePositional(positionals, 1, "question");
 
   const llm = parseLLM(values);
   if (!llm) throw new Error("--llm-provider is required for `ask`");
-  const doc = new Document(file, {
+  const collection = new DocumentCollection(pathOrUrl, {
     embeddings: parseCommonEmbedding(values),
     llm,
     vectorStore: parseVectorStore(values),
   });
 
-  const opts: Parameters<Document["ask"]>[1] = {};
+  const opts: Parameters<DocumentCollection["ask"]>[1] = {};
   if (values["top-k"]) opts.topK = Number(values["top-k"]);
 
   if (values.stream) {
-    for await (const chunk of doc.askStream(question, opts)) {
+    for await (const chunk of collection.askStream(question, opts)) {
       process.stdout.write(chunk);
     }
     process.stdout.write("\n");
   } else {
-    const answer = await doc.ask(question, opts);
+    const answer = await collection.ask(question, opts);
     process.stdout.write(`${answer.text}\n`);
   }
 }
@@ -211,22 +211,22 @@ async function runServe(args: string[]): Promise<void> {
       ...COMMON_VECTOR_OPTIONS,
     },
   });
-  const file = requirePositional(positionals, 0, "file");
+  const pathOrUrl = requirePositional(positionals, 0, "path|url");
   const llm = parseLLM(values);
-  const doc = new Document(file, {
+  const collection = new DocumentCollection(pathOrUrl, {
     embeddings: parseCommonEmbedding(values),
     ...(llm ? { llm } : {}),
     vectorStore: parseVectorStore(values),
   });
-  await doc.build();
+  await collection.build();
 
-  const serveOpts: Parameters<Document["serve"]>[0] = {};
+  const serveOpts: Parameters<DocumentCollection["serve"]>[0] = {};
   if (llm) serveOpts.llm = llm;
   if (values.host) serveOpts.host = values.host as string;
   if (values.port) serveOpts.port = Number(values.port);
   if (values.token) serveOpts.bearerToken = values.token as string;
 
-  const handle = await doc.serve(serveOpts);
+  const handle = await collection.serve(serveOpts);
   process.stdout.write(`RagLite listening on ${handle.url}\n`);
 }
 

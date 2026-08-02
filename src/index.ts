@@ -14,6 +14,11 @@ export { BaseChunker, RecursiveChunker } from "./chunking/index.js";
 export type { DocumentOptions } from "./config.js";
 export { PACKAGE_NAME, PACKAGE_VERSION, PACKAGE_VERSION as VERSION } from "./constants.js";
 export type {
+  CollectionAskOptions,
+  CollectionBuildResult,
+} from "./core/collection.js";
+export { DocumentCollection } from "./core/collection.js";
+export type {
   AskOptions,
   IndexBuildResult,
   IndexOptions,
@@ -55,12 +60,16 @@ export {
 } from "./llm/index.js";
 export {
   BaseLoader,
+  DirectoryLoader,
   DocxLoader,
   getLoader,
+  isSupportedFile,
+  isUrl,
   JsonLoader,
   MarkdownLoader,
   PdfLoader,
   TxtLoader,
+  WebLoader,
 } from "./loaders/index.js";
 export type { RetrieveOptions } from "./retrieval/index.js";
 export { Retriever } from "./retrieval/index.js";
