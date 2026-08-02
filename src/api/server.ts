@@ -4,6 +4,7 @@ import { HTTPException } from "hono/http-exception";
 import { streamText as honoStreamText } from "hono/streaming";
 import { ZodError } from "zod";
 import { PACKAGE_VERSION } from "../constants.js";
+import type { DocumentCollection } from "../core/collection.js";
 import type { Document } from "../core/document.js";
 import { RagLiteError } from "../errors.js";
 import type { LLMProviderConfig } from "../types.js";
@@ -29,13 +30,15 @@ export interface ServerHandle {
   url: string;
 }
 
+export type ServerTarget = Document | DocumentCollection;
+
 export async function createServer(
-  document: Document,
+  target: ServerTarget,
   options: ServeOptions,
 ): Promise<ServerHandle> {
   const host = options.host ?? "127.0.0.1";
   const port = options.port ?? 8085;
-  const app = buildApp(document, options);
+  const app = buildApp(target, options);
 
   return new Promise((resolvePromise, rejectPromise) => {
     try {
@@ -55,7 +58,7 @@ export async function createServer(
   });
 }
 
-export function buildApp(document: Document, options: ServeOptions): Hono {
+export function buildApp(target: ServerTarget, options: ServeOptions): Hono {
   const app = new Hono();
 
   if (options.requestLogging) {
@@ -94,17 +97,19 @@ export function buildApp(document: Document, options: ServeOptions): Hono {
     return c.json({ error: "InternalServerError" }, 500);
   });
 
-  app.get("/health", (c) =>
-    c.json({
+  app.get("/health", (c) => {
+    const chunks = target.chunkCount;
+    const namespace = "storeNamespace" in target ? (target as Document).storeNamespace : undefined;
+    return c.json({
       status: "ok",
       version: PACKAGE_VERSION,
-      chunks: document.chunkCount,
-      namespace: document.storeNamespace,
-    }),
-  );
+      chunks,
+      ...(namespace !== undefined ? { namespace } : {}),
+    });
+  });
 
   app.get("/info", (c) => {
-    const cfg = document.resolvedConfig;
+    const cfg = target.resolvedConfig;
     return c.json({
       version: PACKAGE_VERSION,
       chunkSize: cfg.chunkSize,
@@ -112,13 +117,13 @@ export function buildApp(document: Document, options: ServeOptions): Hono {
       topK: cfg.topK,
       embeddings: { provider: cfg.embeddings.provider, model: cfg.embeddings.model },
       llmProvider: (options.llm ?? cfg.llm)?.provider ?? null,
-      chunks: document.chunkCount,
+      chunks: target.chunkCount,
     });
   });
 
   app.post("/search", async (c) => {
     const body = SearchRequestSchema.parse(await c.req.json());
-    const results = await document.search(body.query, {
+    const results = await target.search(body.query, {
       ...(body.topK !== undefined ? { topK: body.topK } : {}),
       ...(body.scoreThreshold !== undefined ? { scoreThreshold: body.scoreThreshold } : {}),
     });
@@ -138,13 +143,13 @@ export function buildApp(document: Document, options: ServeOptions): Hono {
 
       if (body.stream) {
         return honoStreamText(c, async (stream) => {
-          for await (const chunk of document.askStream(body.question, askOptions)) {
+          for await (const chunk of target.askStream(body.question, askOptions)) {
             await stream.write(chunk);
           }
         });
       }
 
-      const answer = await document.ask(body.question, askOptions);
+      const answer = await target.ask(body.question, askOptions);
       return c.json(answer);
     });
   } else {

@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.0] - 2026-08-02
+
+### Added
+- **Multi-Document & Directory Ingestion (`DocumentCollection`):**
+  - Added `DocumentCollection` class to manage semantic indexing, multi-document retrieval, and Q&A across folders, glob patterns, URLs, and mixed files.
+  - Parallel semantic search over collection vector stores with score-based top-$K$ merging and ranking.
+  - Contextual Q&A synthesis (`ask` and `askStream`) across multi-document collections.
+- **Directory Loader (`DirectoryLoader`):**
+  - Recursive directory scanner (`recursive: true`) with glob pattern matching (e.g. `./docs/**/*.md`).
+  - Auto-detection of supported extensions (`.pdf`, `.txt`, `.md`, `.json`, `.docx`).
+  - Detailed error reporting and warning logs for unsupported/empty files.
+- **Web Loader (`WebLoader`):**
+  - Native loader for fetching HTTP/HTTPS web URLs directly.
+  - Automatic HTML cleaning into formatted text/markdown with script and style tag stripping.
+  - JSON and plain text content-type parsing.
+- **CLI & REST API Support:**
+  - Upgraded `raglite index`, `search`, `ask`, and `serve` CLI commands to process directories, glob patterns, and URLs.
+  - Updated Hono REST server to support `DocumentCollection` and single `Document` targets.
+- **Demo Examples & Tests:**
+  - Added `examples/collection-demo.ts` and `npm run example:collection` script.
+  - Added unit and integration tests for `DirectoryLoader`, `WebLoader`, and `DocumentCollection`.
+
 ## [1.1.0] - 2026-07-19
 
 ### Added
