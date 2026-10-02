@@ -1,0 +1,321 @@
+[
+  {
+    "name": "agreement wins",
+    "rrfK": 60,
+    "topK": 4,
+    "vector": {
+      "weight": 1,
+      "hits": [
+        {
+          "id": "a",
+          "text": "a",
+          "metadata": {
+            "source": "s",
+            "chunk": 1,
+            "totalChunks": 1
+          },
+          "score": 0.9
+        },
+        {
+          "id": "b",
+          "text": "b",
+          "metadata": {
+            "source": "s",
+            "chunk": 1,
+            "totalChunks": 1
+          },
+          "score": 0.8
+        },
+        {
+          "id": "c",
+          "text": "c",
+          "metadata": {
+            "source": "s",
+            "chunk": 1,
+            "totalChunks": 1
+          },
+          "score": 0.7
+        }
+      ]
+    },
+    "keyword": {
+      "weight": 1,
+      "hits": [
+        {
+          "id": "b",
+          "text": "b",
+          "metadata": {
+            "source": "s",
+            "chunk": 1,
+            "totalChunks": 1
+          },
+          "score": 7.5
+        },
+        {
+          "id": "d",
+          "text": "d",
+          "metadata": {
+            "source": "s",
+            "chunk": 1,
+            "totalChunks": 1
+          },
+          "score": 3.1
+        }
+      ]
+    },
+    "results": [
+      {
+        "id": "b",
+        "score": 0.9919354838709679,
+        "scores": {
+          "vector": 0.8,
+          "keyword": 7.5,
+          "fused": 0.03252247488101534
+        }
+      },
+      {
+        "id": "a",
+        "score": 0.5,
+        "scores": {
+          "vector": 0.9,
+          "fused": 0.01639344262295082
+        }
+      },
+      {
+        "id": "d",
+        "score": 0.4919354838709677,
+        "scores": {
+          "keyword": 3.1,
+          "fused": 0.016129032258064516
+        }
+      },
+      {
+        "id": "c",
+        "score": 0.4841269841269841,
+        "scores": {
+          "vector": 0.7,
+          "fused": 0.015873015873015872
+        }
+      }
+    ]
+  },
+  {
+    "name": "ties break on id",
+    "rrfK": 60,
+    "topK": 4,
+    "vector": {
+      "weight": 1,
+      "hits": [
+        {
+          "id": "z",
+          "text": "z",
+          "metadata": {
+            "source": "s",
+            "chunk": 1,
+            "totalChunks": 1
+          },
+          "score": 0.9
+        },
+        {
+          "id": "y",
+          "text": "y",
+          "metadata": {
+            "source": "s",
+            "chunk": 1,
+            "totalChunks": 1
+          },
+          "score": 0.5
+        }
+      ]
+    },
+    "keyword": {
+      "weight": 1,
+      "hits": [
+        {
+          "id": "y",
+          "text": "y",
+          "metadata": {
+            "source": "s",
+            "chunk": 1,
+            "totalChunks": 1
+          },
+          "score": 2
+        },
+        {
+          "id": "z",
+          "text": "z",
+          "metadata": {
+            "source": "s",
+            "chunk": 1,
+            "totalChunks": 1
+          },
+          "score": 1
+        }
+      ]
+    },
+    "results": [
+      {
+        "id": "y",
+        "score": 0.9919354838709679,
+        "scores": {
+          "vector": 0.5,
+          "keyword": 2,
+          "fused": 0.03252247488101534
+        }
+      },
+      {
+        "id": "z",
+        "score": 0.9919354838709679,
+        "scores": {
+          "vector": 0.9,
+          "keyword": 1,
+          "fused": 0.03252247488101534
+        }
+      }
+    ]
+  },
+  {
+    "name": "weights and small k",
+    "rrfK": 1,
+    "topK": 3,
+    "vector": {
+      "weight": 0.5,
+      "hits": [
+        {
+          "id": "a",
+          "text": "a",
+          "metadata": {
+            "source": "s",
+            "chunk": 1,
+            "totalChunks": 1
+          },
+          "score": 0.9
+        },
+        {
+          "id": "b",
+          "text": "b",
+          "metadata": {
+            "source": "s",
+            "chunk": 1,
+            "totalChunks": 1
+          },
+          "score": 0.8
+        }
+      ]
+    },
+    "keyword": {
+      "weight": 2,
+      "hits": [
+        {
+          "id": "c",
+          "text": "c",
+          "metadata": {
+            "source": "s",
+            "chunk": 1,
+            "totalChunks": 1
+          },
+          "score": 4
+        },
+        {
+          "id": "a",
+          "text": "a",
+          "metadata": {
+            "source": "s",
+            "chunk": 1,
+            "totalChunks": 1
+          },
+          "score": 1
+        }
+      ]
+    },
+    "results": [
+      {
+        "id": "c",
+        "score": 0.8,
+        "scores": {
+          "keyword": 4,
+          "fused": 1
+        }
+      },
+      {
+        "id": "a",
+        "score": 0.7333333333333333,
+        "scores": {
+          "vector": 0.9,
+          "keyword": 1,
+          "fused": 0.9166666666666666
+        }
+      },
+      {
+        "id": "b",
+        "score": 0.13333333333333333,
+        "scores": {
+          "vector": 0.8,
+          "fused": 0.16666666666666666
+        }
+      }
+    ]
+  },
+  {
+    "name": "empty keyword list",
+    "rrfK": 60,
+    "topK": 2,
+    "vector": {
+      "weight": 1,
+      "hits": [
+        {
+          "id": "a",
+          "text": "a",
+          "metadata": {
+            "source": "s",
+            "chunk": 1,
+            "totalChunks": 1
+          },
+          "score": 0.9
+        },
+        {
+          "id": "b",
+          "text": "b",
+          "metadata": {
+            "source": "s",
+            "chunk": 1,
+            "totalChunks": 1
+          },
+          "score": 0.8
+        },
+        {
+          "id": "c",
+          "text": "c",
+          "metadata": {
+            "source": "s",
+            "chunk": 1,
+            "totalChunks": 1
+          },
+          "score": 0.1
+        }
+      ]
+    },
+    "keyword": {
+      "weight": 1,
+      "hits": []
+    },
+    "results": [
+      {
+        "id": "a",
+        "score": 0.5,
+        "scores": {
+          "vector": 0.9,
+          "fused": 0.01639344262295082
+        }
+      },
+      {
+        "id": "b",
+        "score": 0.4919354838709677,
+        "scores": {
+          "vector": 0.8,
+          "fused": 0.016129032258064516
+        }
+      }
+    ]
+  }
+]

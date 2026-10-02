@@ -1,4 +1,4 @@
-export type { VectorSearchHit, VectorStore } from "./base.js";
+export type { IndexedChunk, VectorSearchHit, VectorStore } from "./base.js";
 export { createVectorStore } from "./factory.js";
 export { LanceDbVectorStore } from "./lancedb.js";
 export { MemoryVectorStore } from "./memory.js";

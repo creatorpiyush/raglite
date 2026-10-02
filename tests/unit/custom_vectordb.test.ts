@@ -155,6 +155,39 @@ describe("Custom Vector DBs", () => {
       expect(store.count()).toBe(0);
     });
 
+    it("lists stored chunks across scroll pages, skipping the metadata point", async () => {
+      const bodies: Record<string, unknown>[] = [];
+      const point = (id: string, n: number) => ({
+        id: `uuid-${id}`,
+        payload: { id, text: `text ${n}`, metadata: { source: "a.txt", chunk: n, totalChunks: 3 } },
+      });
+      const pages = [
+        { points: [point("ns_000003", 3), { id: "m", payload: { isMetadata: true } }], next: "p2" },
+        { points: [point("ns_000001", 1), point("ns_000002", 2)], next: null },
+      ];
+      globalThis.fetch = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+        expect(url).toBe("http://qdrant:6333/collections/shared/points/scroll");
+        const body = JSON.parse(init!.body as string);
+        bodies.push(body);
+        const page = pages[bodies.length - 1]!;
+        return new Response(
+          JSON.stringify({ result: { points: page.points, next_page_offset: page.next } }),
+          { status: 200 },
+        );
+      });
+
+      const store = new QdrantVectorStore(
+        { provider: "qdrant", url: "http://qdrant:6333", indexName: "shared" },
+        "ns",
+      );
+      const chunks = await store.listChunks();
+      expect(chunks.map((c) => c.id)).toEqual(["ns_000001", "ns_000002", "ns_000003"]);
+      expect(chunks[0]!.text).toBe("text 1");
+      expect(bodies[0]!.with_vector).toBe(false);
+      expect(JSON.stringify(bodies[0]!.filter)).toContain('"value":"ns"');
+      expect(bodies[1]!.offset).toBe("p2");
+    });
+
     it("scopes reset, search and metadata to its namespace in a shared collection", async () => {
       const calls: { url: string; method?: string; body?: Record<string, unknown> }[] = [];
       globalThis.fetch = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {

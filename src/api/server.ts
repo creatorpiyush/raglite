@@ -115,6 +115,7 @@ export function buildApp(target: ServerTarget, options: ServeOptions): Hono {
       chunkSize: cfg.chunkSize,
       overlap: cfg.overlap,
       topK: cfg.topK,
+      retrievalMode: cfg.retrieval.mode ?? "vector",
       embeddings: { provider: cfg.embeddings.provider, model: cfg.embeddings.model },
       llmProvider: (options.llm ?? cfg.llm)?.provider ?? null,
       chunks: target.chunkCount,
@@ -126,6 +127,7 @@ export function buildApp(target: ServerTarget, options: ServeOptions): Hono {
     const results = await target.search(body.query, {
       ...(body.topK !== undefined ? { topK: body.topK } : {}),
       ...(body.scoreThreshold !== undefined ? { scoreThreshold: body.scoreThreshold } : {}),
+      ...(body.mode !== undefined ? { mode: body.mode } : {}),
     });
     return c.json({ results });
   });
@@ -139,6 +141,7 @@ export function buildApp(target: ServerTarget, options: ServeOptions): Hono {
       const askOptions: Parameters<Document["ask"]>[1] = { llm: askProvider };
       if (body.topK !== undefined) askOptions.topK = body.topK;
       if (body.scoreThreshold !== undefined) askOptions.scoreThreshold = body.scoreThreshold;
+      if (body.mode !== undefined) askOptions.mode = body.mode;
       if (body.includeCitations !== undefined) askOptions.includeCitations = body.includeCitations;
 
       if (body.stream) {

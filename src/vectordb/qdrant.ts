@@ -6,7 +6,7 @@ import type {
   StoredChunk,
   VectorStoreProviderConfig,
 } from "../types.js";
-import type { VectorSearchHit, VectorStore } from "./base.js";
+import type { IndexedChunk, VectorSearchHit, VectorStore } from "./base.js";
 
 function stringToUuid(str: string): string {
   const hash = createHash("md5").update(str).digest("hex");
@@ -193,6 +193,58 @@ export class QdrantVectorStore implements VectorStore {
 
   count(): number {
     return this.cachedCount;
+  }
+
+  async listChunks(): Promise<IndexedChunk[]> {
+    const chunks: IndexedChunk[] = [];
+    let offset: string | number | null = null;
+    try {
+      do {
+        const res = await fetch(`${this.url}/collections/${this.collectionName}/points/scroll`, {
+          method: "POST",
+          headers: this.headers,
+          body: JSON.stringify({
+            limit: 256,
+            with_payload: true,
+            with_vector: false,
+            ...(offset !== null ? { offset } : {}),
+            ...(this.shared ? { filter: this.namespaceFilter } : {}),
+          }),
+        });
+        if (res.status !== 200) {
+          throw new Error(`Scroll returned status ${res.status}: ${await res.text()}`);
+        }
+        const data = (await res.json()) as {
+          result: {
+            points: Array<{
+              id: string;
+              payload?: {
+                id?: string;
+                text?: string;
+                metadata?: ChunkMetadata;
+                isMetadata?: boolean;
+              };
+            }>;
+            next_page_offset?: string | number | null;
+          };
+        };
+        for (const p of data.result.points) {
+          if (p.id === this.metadataId || p.payload?.isMetadata) continue;
+          chunks.push({
+            id: p.payload?.id ?? p.id,
+            text: p.payload?.text ?? "",
+            metadata: p.payload?.metadata ?? { source: "", chunk: 0, totalChunks: 0 },
+          });
+        }
+        offset = data.result.next_page_offset ?? null;
+      } while (offset !== null);
+    } catch (cause) {
+      throw new VectorDBError(`Failed to list chunks in Qdrant collection ${this.collectionName}`, {
+        cause,
+      });
+    }
+    // Scroll returns points in id (uuid) order; restore chunk order.
+    return chunks.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   }
 
   async saveIndexMetadata(metadata: IndexMetadata): Promise<void> {

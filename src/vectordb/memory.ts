@@ -3,7 +3,7 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { VectorDBError } from "../errors.js";
 import type { IndexMetadata, StoredChunk } from "../types.js";
-import type { VectorSearchHit, VectorStore } from "./base.js";
+import type { IndexedChunk, VectorSearchHit, VectorStore } from "./base.js";
 
 /**
  * Simple in-memory vector store with JSON persistence.
@@ -77,6 +77,10 @@ export class MemoryVectorStore implements VectorStore {
 
   count(): number {
     return this.chunks.length;
+  }
+
+  async listChunks(): Promise<IndexedChunk[]> {
+    return this.chunks.map(({ id, text, metadata }) => ({ id, text, metadata }));
   }
 
   async saveIndexMetadata(metadata: IndexMetadata): Promise<void> {

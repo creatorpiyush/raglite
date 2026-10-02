@@ -67,6 +67,39 @@ const answer = await collection.ask("What is the refund policy?");
 console.log(answer.text);
 ```
 
+## Hybrid search (keyword + vector)
+
+Vector search matches meaning, but it can miss exact terms such as error codes, SKUs, function names or rare product names. Keyword search (BM25) finds those exactly. `hybrid` runs both and merges the results with Reciprocal Rank Fusion.
+
+```ts
+await doc.search("ERR_4021", { mode: "hybrid" }); // "vector" (default) | "keyword" | "hybrid"
+await doc.ask("What does ERR_4021 mean?", { mode: "hybrid" });
+
+// Or set a default once; it applies to search(), ask() and askStream().
+new Document("./runbook.md", {
+  retrieval: {
+    mode: "hybrid",
+    hybrid: { rrfK: 60, candidates: 50, weights: { vector: 1, keyword: 1 } },
+  },
+});
+```
+
+- In `keyword` and `hybrid` modes, `score` is the fused rank score scaled to 0..1 (1 means ranked first by every retriever). Each result also has `scores: { vector?, keyword?, fused }`. Vector mode results are unchanged.
+- `scoreThreshold` is still a cosine similarity. In hybrid mode it filters the vector results before fusion; keyword matches are not filtered by it.
+- The keyword index is built by `build()` from the chunk texts, with no extra embedding calls, and saved as `<storeDir>/<namespace>/keyword.json`. It works with every vector store. With Qdrant or Pinecone, keep `storeDir` on persistent disk.
+- Indexes built before 1.3: the memory, LanceDB and Qdrant stores build the keyword index from the stored chunks on the first keyword or hybrid search. Other stores log a warning and use vector search until you run `build({ rebuild: true })`.
+- The same options work over HTTP (`"mode"` on `/search` and `/ask`) and in the CLI (`--mode hybrid`).
+
+The tokenizer is the same in the TypeScript and Python SDKs:
+
+| Text | How it is indexed |
+|------|-------------------|
+| Latin, Cyrillic, Greek, Arabic, Devanagari and other spaced scripts | Words, lowercased and NFKC-normalised (`ﬁ` → `fi`, `ＡＢＣ` → `abc`) |
+| Code identifiers | `gpt-4.1`, `snake_case` and `ERR_42` stay whole, and their parts are indexed too |
+| Chinese, Japanese, Korean, Thai, Lao, Khmer, Myanmar | Overlapping character pairs (`退款处理` → `退款`, `款处`, `处理`), so no dictionary is needed |
+
+There is no stemming or stopword list, because both are language-specific: in keyword mode `refund` does not match `refunds`. Hybrid mode's vector side covers those cases.
+
 ## Choose any LLM at ask-time
 
 ```ts
@@ -165,7 +198,9 @@ You can also supply your own custom class instance directly as long as it implem
 import { VectorStore } from "raglite-toolkit";
 
 class MyCustomStore implements VectorStore {
-  // Implement methods: load, reset, add, search, count, saveIndexMetadata, readIndexMetadata
+  // Implement: namespace, load, reset, add, search, count, saveIndexMetadata, readIndexMetadata
+  // Optional: listChunks() lets hybrid search rebuild a missing keyword index from your store;
+  //           keywordSearch(query, topK) replaces the built-in BM25 index with your own.
 }
 
 const doc = new Document("./policy.pdf", {
@@ -229,6 +264,7 @@ curl -X POST http://127.0.0.1:8085/ask \
 ```bash
 raglite index ./policy.pdf --embed-provider openai --embed-key $OPENAI_API_KEY
 raglite search ./docs "refund policy" --top-k 3
+raglite search ./docs "ERR_4021" --mode hybrid
 raglite ask ./docs "What is the refund policy?" \
   --llm-provider anthropic --llm-key $ANTHROPIC_API_KEY --stream
 raglite serve https://example.com \
@@ -267,14 +303,15 @@ raglite serve https://example.com \
 
 ```ts
 new Document(path, {
-  chunkSize: 500,       // words per chunk
+  chunkSize: 500,       // words per chunk (characters for Chinese, Japanese, Thai, ...); unset = keep the existing index's
   overlap: 50,          // words of overlap
   topK: 5,              // default results
   scoreThreshold: 0,    // cosine similarity floor (0..1)
   storeDir: ".raglite", // where indexes live
-  embeddings: { provider: "local" },
+  embeddings: { provider: "local" }, // unset = keep the existing index's provider/model (local for new indexes)
   llm: { provider: "openai", apiKey: "..." },
   logLevel: "info",     // silent | info | debug
+  retrieval: { mode: "vector" }, // vector | keyword | hybrid
 });
 ```
 

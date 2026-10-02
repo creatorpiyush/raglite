@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { INDEX_FORMAT_VERSION } from "../../src/constants.js";
 import type { EmbeddingProviderConfig, IndexMetadata } from "../../src/types.js";
+import { namespaceFromPath } from "../../src/utils/hash.js";
 import { MockEmbedder } from "../helpers/mock-embedder.js";
 import { makeTempWorkspace, type TempWorkspace } from "../helpers/tmp.js";
 
@@ -125,8 +126,11 @@ describe("DocumentCollection.search failures", () => {
 });
 
 describe("Index format version", () => {
-  async function buildThenEdit(edit: (meta: IndexMetadata) => void) {
-    const path = ws.file("policy.txt", "Refunds are issued within 30 days.");
+  async function buildThenEdit(
+    edit: (meta: IndexMetadata) => void,
+    text = "Refunds are issued within 30 days.",
+  ) {
+    const path = ws.file("policy.txt", text);
     const opts = { storeDir: join(ws.root, ".raglite"), logLevel: "silent" as const };
     const doc = new Document(path, opts);
     await doc.build();
@@ -161,10 +165,96 @@ describe("Index format version", () => {
     expect(result.cached).toBe(false);
   });
 
+  it("upgrades a format-1 index in place when chunking is unchanged", async () => {
+    const result = await buildThenEdit((meta) => {
+      meta.formatVersion = 1;
+    });
+    expect(result.cached).toBe(true);
+    const metaPath = join(ws.root, ".raglite", namespaceOf("policy.txt"), "metadata.json");
+    const meta = JSON.parse(readFileSync(metaPath, "utf-8")) as IndexMetadata;
+    expect(meta.formatVersion).toBe(INDEX_FORMAT_VERSION);
+  });
+
+  it("rebuilds a format-1 index of text written without spaces", async () => {
+    const result = await buildThenEdit((meta) => {
+      meta.formatVersion = 1;
+    }, "返金は三十日以内に行われます。");
+    expect(result.cached).toBe(false);
+  });
+
   it("rebuilds an index with a different formatVersion", async () => {
     const result = await buildThenEdit((meta) => {
       meta.formatVersion = INDEX_FORMAT_VERSION + 1;
     });
     expect(result.cached).toBe(false);
+  });
+});
+
+function namespaceOf(name: string): string {
+  return namespaceFromPath(join(ws.root, name));
+}
+
+describe("Chunking defaults", () => {
+  it("reuses the existing index's chunking when none is given", async () => {
+    const path = ws.file("policy.txt", "one two three four five six seven eight nine ten");
+    const opts = { storeDir: join(ws.root, ".raglite"), logLevel: "silent" as const };
+    const first = await new Document(path, opts).build({ chunkSize: 4, overlap: 1 });
+    expect(first.chunkCount).toBe(3);
+
+    const plain = await new Document(path, opts).build();
+    expect(plain.cached).toBe(true);
+    expect(plain.chunkCount).toBe(3);
+
+    const collection = await new DocumentCollection(path, opts).build();
+    expect(collection.cachedDocuments).toBe(1);
+  });
+
+  it("rebuilds when chunking is given explicitly", async () => {
+    const path = ws.file("policy.txt", "one two three four five six seven eight nine ten");
+    const opts = { storeDir: join(ws.root, ".raglite"), logLevel: "silent" as const };
+    await new Document(path, opts).build({ chunkSize: 4, overlap: 1 });
+
+    const viaBuild = await new Document(path, opts).build({ chunkSize: 500 });
+    expect(viaBuild.cached).toBe(false);
+    expect(viaBuild.chunkCount).toBe(1);
+
+    await new Document(path, opts).build({ chunkSize: 4, overlap: 1 });
+    const viaConstructor = await new Document(path, { ...opts, chunkSize: 500 }).build();
+    expect(viaConstructor.cached).toBe(false);
+  });
+});
+
+describe("Embedding defaults", () => {
+  const opts = () => ({ storeDir: join(ws.root, ".raglite"), logLevel: "silent" as const });
+
+  it("keeps the existing index's provider and model when none is configured", async () => {
+    const path = ws.file("policy.txt", "Refunds are issued within 30 days.");
+    await new Document(path, {
+      ...opts(),
+      embeddings: { provider: "openai", model: "text-embedding-3-small", apiKey: "sk-test" },
+    }).build();
+    embedderConfigs.length = 0;
+
+    const plain = await new Document(path, opts()).build();
+    expect(plain.cached).toBe(true);
+    expect(plain.embeddingProvider).toBe("openai");
+    expect(embedderConfigs[0]).toMatchObject({
+      provider: "openai",
+      model: "text-embedding-3-small",
+    });
+
+    const collection = await new DocumentCollection(path, opts()).build();
+    expect(collection.cachedDocuments).toBe(1);
+  });
+
+  it("rebuilds when a different provider is configured explicitly", async () => {
+    const path = ws.file("policy.txt", "Refunds are issued within 30 days.");
+    await new Document(path, { ...opts(), embeddings: { provider: "openai" } }).build();
+    const local = await new Document(path, {
+      ...opts(),
+      embeddings: { provider: "local" },
+    }).build();
+    expect(local.cached).toBe(false);
+    expect(local.embeddingProvider).toBe("local");
   });
 });
