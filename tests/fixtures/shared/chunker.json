@@ -81,14 +81,43 @@
     "text": "café naïve 返金 🚀 ok",
     "chunkSize": 2,
     "overlap": 1,
-    "chunks": ["café naïve", "naïve 返金", "返金 🚀", "🚀 ok"]
+    "chunks": ["café naïve", "naïve 返", "返金", "金 🚀", "🚀 ok"]
   },
   {
-    "name": "unspaced CJK stays one word",
+    "name": "unspaced CJK splits by character",
     "text": "返金は三十日以内に行われます。配送には二営業日かかります。",
     "chunkSize": 5,
     "overlap": 1,
-    "chunks": ["返金は三十日以内に行われます。配送には二営業日かかります。"]
+    "chunks": [
+      "返金は三十",
+      "十日以内に",
+      "に行われま",
+      "ます。配送",
+      "送には二営",
+      "営業日かか",
+      "かります。"
+    ]
+  },
+  {
+    "name": "Japanese mixed with spaced words",
+    "text": "これは test です API返金 ok",
+    "chunkSize": 4,
+    "overlap": 1,
+    "chunks": ["これは test", "test です API", "API返金 ok"]
+  },
+  {
+    "name": "Thai keeps combining marks",
+    "text": "สวัสดีครับ ยินดีต้อนรับ",
+    "chunkSize": 3,
+    "overlap": 0,
+    "chunks": ["สวัส", "ดีครั", "บ ยิน", "ดีต้อ", "นรับ"]
+  },
+  {
+    "name": "Korean stays word-based",
+    "text": "환불은 30일 이내에 처리됩니다",
+    "chunkSize": 2,
+    "overlap": 0,
+    "chunks": ["환불은 30일", "이내에 처리됩니다"]
   },
   {
     "name": "overlap not smaller than chunk size",

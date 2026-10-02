@@ -47,12 +47,46 @@ export interface StoredChunk {
   metadata: ChunkMetadata;
 }
 
+/** Per-retriever scores of a hybrid or keyword search result. */
+export interface SearchScores {
+  /** Cosine similarity, when the chunk was in the vector results. */
+  vector?: number;
+  /** BM25 score, when the chunk was in the keyword results. */
+  keyword?: number;
+  /** Raw Reciprocal Rank Fusion score; `score` is this normalised to [0, 1]. */
+  fused?: number;
+}
+
 export interface SearchResult {
   id: string;
   text: string;
   metadata: ChunkMetadata;
+  /** Cosine similarity in vector mode; normalised fused rank score in keyword and hybrid modes. */
   score: number;
   distance: number;
+  /** Set in keyword and hybrid modes. */
+  scores?: SearchScores;
+}
+
+/**
+ * - `vector`: embedding similarity only (the default).
+ * - `keyword`: BM25 over chunk texts only; good for exact terms such as error codes or SKUs.
+ * - `hybrid`: both, merged with Reciprocal Rank Fusion.
+ */
+export type RetrievalMode = "vector" | "keyword" | "hybrid";
+
+export interface HybridOptions {
+  /** RRF constant; larger values flatten the difference between ranks (default 60). */
+  rrfK?: number;
+  /** Results taken from each retriever before fusion (default max(50, topK * 4)). */
+  candidates?: number;
+  /** Relative weight of each retriever in hybrid mode (default 1 each). */
+  weights?: { vector?: number; keyword?: number };
+}
+
+export interface RetrievalOptions {
+  mode?: RetrievalMode;
+  hybrid?: HybridOptions;
 }
 
 export interface IndexMetadata {

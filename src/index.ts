@@ -71,21 +71,37 @@ export {
   TxtLoader,
   WebLoader,
 } from "./loaders/index.js";
-export type { RetrieveOptions } from "./retrieval/index.js";
-export { Retriever } from "./retrieval/index.js";
+export type {
+  KeywordHit,
+  KeywordIndexFile,
+  RankedList,
+  RetrievalPlan,
+  RetrieveOptions,
+} from "./retrieval/index.js";
+export {
+  KeywordIndex,
+  Retriever,
+  reciprocalRankFusion,
+  resolveRetrievalPlan,
+} from "./retrieval/index.js";
+export { TOKENIZER_NAME, tokenize } from "./text/tokenizer.js";
 export type {
   ChunkMetadata,
   EmbeddingProviderConfig,
   EmbeddingProviderName,
+  HybridOptions,
   IndexMetadata,
   LLMProviderConfig,
   LLMProviderName,
+  RetrievalMode,
+  RetrievalOptions,
   SearchResult,
+  SearchScores,
   StoredChunk,
   VectorStoreProviderConfig,
   VectorStoreProviderName,
 } from "./types.js";
-export type { VectorSearchHit, VectorStore } from "./vectordb/index.js";
+export type { IndexedChunk, VectorSearchHit, VectorStore } from "./vectordb/index.js";
 export {
   createVectorStore,
   LanceDbVectorStore,

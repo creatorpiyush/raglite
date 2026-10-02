@@ -8,6 +8,7 @@ import {
 import type {
   EmbeddingProviderConfig,
   LLMProviderConfig,
+  RetrievalOptions,
   VectorStoreProviderConfig,
 } from "./types.js";
 import type { LogLevel } from "./utils/logger.js";
@@ -23,6 +24,8 @@ export interface DocumentOptions {
   llm?: LLMProviderConfig;
   logLevel?: LogLevel;
   vectorStore?: VectorStoreProviderConfig | VectorStore;
+  /** Default retrieval mode and hybrid options for search(), ask() and askStream(). */
+  retrieval?: RetrievalOptions;
 }
 
 export interface ResolvedConfig {
@@ -35,6 +38,7 @@ export interface ResolvedConfig {
   llm?: LLMProviderConfig;
   logLevel: LogLevel;
   vectorStore: VectorStoreProviderConfig | VectorStore;
+  retrieval: RetrievalOptions;
 }
 
 export function resolveConfig(options: DocumentOptions = {}): ResolvedConfig {
@@ -54,5 +58,6 @@ export function resolveConfig(options: DocumentOptions = {}): ResolvedConfig {
     llm: options.llm,
     logLevel: options.logLevel ?? "info",
     vectorStore,
+    retrieval: options.retrieval ?? {},
   };
 }

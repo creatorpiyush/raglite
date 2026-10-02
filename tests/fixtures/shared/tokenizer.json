@@ -1,0 +1,141 @@
+[
+  {
+    "name": "english",
+    "text": "Refunds are issued within 30 days.",
+    "tokens": ["refunds", "are", "issued", "within", "30", "days"]
+  },
+  {
+    "name": "code identifiers",
+    "text": "Call get_user() on gpt-4.1; see ERR_4021 and v1.2.3.",
+    "tokens": [
+      "call",
+      "get_user",
+      "get",
+      "user",
+      "on",
+      "gpt-4.1",
+      "gpt",
+      "4",
+      "1",
+      "see",
+      "err_4021",
+      "err",
+      "4021",
+      "and",
+      "v1.2.3",
+      "v1",
+      "2",
+      "3"
+    ]
+  },
+  {
+    "name": "trailing and doubled joiners",
+    "text": "end. e.g. a--b _x_ snake_case_",
+    "tokens": ["end", "e.g", "e", "g", "a", "b", "x", "snake_case", "snake", "case"]
+  },
+  {
+    "name": "german",
+    "text": "Die STRASSE ist groß. Übermäßig!",
+    "tokens": ["die", "strasse", "ist", "groß", "übermäßig"]
+  },
+  {
+    "name": "french",
+    "text": "Ça coûte 20€ — très cher, n'est-ce pas ?",
+    "tokens": ["ça", "coûte", "20", "très", "cher", "n", "est-ce", "est", "ce", "pas"]
+  },
+  {
+    "name": "russian",
+    "text": "Возврат средств в течение 30 дней",
+    "tokens": ["возврат", "средств", "в", "течение", "30", "дней"]
+  },
+  {
+    "name": "greek final sigma",
+    "text": "ΟΔΟΣ Οδυσσέας",
+    "tokens": ["οδος", "οδυσσέας"]
+  },
+  {
+    "name": "turkish dotted I",
+    "text": "İstanbul IŞIK",
+    "tokens": ["i̇stanbul", "işik"]
+  },
+  {
+    "name": "arabic",
+    "text": "يتم استرداد المبلغ خلال ٣٠ يومًا",
+    "tokens": ["يتم", "استرداد", "المبلغ", "خلال", "٣٠", "يومًا"]
+  },
+  {
+    "name": "hindi",
+    "text": "रिफंड 30 दिनों के भीतर जारी किए जाते हैं",
+    "tokens": ["रिफंड", "30", "दिनों", "के", "भीतर", "जारी", "किए", "जाते", "हैं"]
+  },
+  {
+    "name": "persian zero width non-joiner",
+    "text": "می‌خواهم",
+    "tokens": ["میخواهم"]
+  },
+  {
+    "name": "chinese",
+    "text": "退款将在三十天内处理。",
+    "tokens": ["退款", "款将", "将在", "在三", "三十", "十天", "天内", "内处", "处理"]
+  },
+  {
+    "name": "japanese",
+    "text": "返金は30日以内に行われます。カタカナ",
+    "tokens": [
+      "返金",
+      "金は",
+      "30",
+      "日以",
+      "以内",
+      "内に",
+      "に行",
+      "行わ",
+      "われ",
+      "れま",
+      "ます",
+      "カタ",
+      "タカ",
+      "カナ"
+    ]
+  },
+  {
+    "name": "korean",
+    "text": "환불은 30일 이내에 처리됩니다",
+    "tokens": ["환불", "불은", "30", "일", "이내", "내에", "처리", "리됩", "됩니", "니다"]
+  },
+  {
+    "name": "thai",
+    "text": "การคืนเงินภายใน 30 วัน",
+    "tokens": ["กา", "าร", "รคื", "คืน", "นเ", "เงิ", "งิน", "นภ", "ภา", "าย", "ยใ", "ใน", "30", "วัน"]
+  },
+  {
+    "name": "mixed script word",
+    "text": "API返金とSKU-42の在庫",
+    "tokens": ["api", "返金", "金と", "sku-42", "sku", "42", "の在", "在庫"]
+  },
+  {
+    "name": "single CJK character",
+    "text": "金 a 金",
+    "tokens": ["金", "a", "金"]
+  },
+  {
+    "name": "fullwidth and ligatures",
+    "text": "ＡＢＣ１２３ ﬁle ①",
+    "tokens": ["abc123", "file", "1"]
+  },
+  {
+    "name": "emoji and symbols",
+    "text": "ship it 🚀🔥 #release @team $5 100%",
+    "tokens": ["ship", "it", "release", "team", "5", "100"]
+  },
+  {
+    "name": "soft hyphen",
+    "text": "co­operate",
+    "tokens": ["cooperate"]
+  },
+  {
+    "name": "empty",
+    "text": "",
+    "tokens": []
+  }
+]

@@ -1,0 +1,102 @@
+{
+  "chunks": [
+    {
+      "id": "doc_000001",
+      "text": "Refunds are issued within 30 days of purchase."
+    },
+    {
+      "id": "doc_000002",
+      "text": "Error ERR_4021 means the payment gateway timed out."
+    },
+    {
+      "id": "doc_000003",
+      "text": "To retry a failed payment, open the billing page."
+    },
+    {
+      "id": "doc_000004",
+      "text": "返金は三十日以内に行われます。"
+    },
+    {
+      "id": "doc_000005",
+      "text": "The billing page lists every payment and refund."
+    },
+    {
+      "id": "doc_000006",
+      "text": ""
+    }
+  ],
+  "queries": [
+    {
+      "query": "ERR_4021",
+      "topK": 3,
+      "hits": [
+        {
+          "id": "doc_000002",
+          "score": 4.1925514516499724
+        }
+      ]
+    },
+    {
+      "query": "payment",
+      "topK": 3,
+      "hits": [
+        {
+          "id": "doc_000005",
+          "score": 0.6931471805599453
+        },
+        {
+          "id": "doc_000003",
+          "score": 0.6594265069110831
+        },
+        {
+          "id": "doc_000002",
+          "score": 0.628834555559538
+        }
+      ]
+    },
+    {
+      "query": "billing page refund",
+      "topK": 3,
+      "hits": [
+        {
+          "id": "doc_000005",
+          "score": 3.599683875309465
+        },
+        {
+          "id": "doc_000003",
+          "score": 1.9590596478257716
+        }
+      ]
+    },
+    {
+      "query": "refund refund",
+      "topK": 3,
+      "hits": [
+        {
+          "id": "doc_000005",
+          "score": 1.5404450409471488
+        }
+      ]
+    },
+    {
+      "query": "返金",
+      "topK": 3,
+      "hits": [
+        {
+          "id": "doc_000004",
+          "score": 1.2267797611162814
+        }
+      ]
+    },
+    {
+      "query": "nothing matches this",
+      "topK": 3,
+      "hits": []
+    },
+    {
+      "query": "",
+      "topK": 3,
+      "hits": []
+    }
+  ]
+}

@@ -9,7 +9,7 @@ import type {
   StoredChunk,
   VectorStoreProviderConfig,
 } from "../types.js";
-import type { VectorSearchHit, VectorStore } from "./base.js";
+import type { IndexedChunk, VectorSearchHit, VectorStore } from "./base.js";
 
 export class LanceDbVectorStore implements VectorStore {
   readonly namespace: string;
@@ -127,6 +127,22 @@ export class LanceDbVectorStore implements VectorStore {
 
   count(): number {
     return this.cachedCount;
+  }
+
+  async listChunks(): Promise<IndexedChunk[]> {
+    const db = await this.ensureDb();
+    try {
+      if (!(await db.tableNames()).includes("chunks")) return [];
+      const table = await db.openTable("chunks");
+      const rows = (await table.query().select(["id", "text", "metadata"]).toArray()) as Array<{
+        id: string;
+        text: string;
+        metadata: unknown;
+      }>;
+      return rows.map((r) => ({ id: r.id, text: r.text, metadata: r.metadata as ChunkMetadata }));
+    } catch (cause) {
+      throw new VectorDBError(`Failed to list chunks in LanceDB`, { cause });
+    }
   }
 
   async saveIndexMetadata(metadata: IndexMetadata): Promise<void> {

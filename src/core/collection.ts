@@ -10,9 +10,19 @@ import {
   streamAnswer,
 } from "../llm/index.js";
 import { DirectoryLoader, isSupportedFile, isUrl } from "../loaders/index.js";
+import { reciprocalRankFusion } from "../retrieval/fusion.js";
+import { byScoreThenId, type KeywordHit } from "../retrieval/keyword-index.js";
+import { resolveRetrievalPlan } from "../retrieval/plan.js";
 import type { LLMProviderConfig, SearchResult } from "../types.js";
 import { createLogger, type Logger } from "../utils/logger.js";
-import { Document, type IndexOptions, type SearchOptions } from "./document.js";
+import {
+  Document,
+  fusionLists,
+  type IndexOptions,
+  type RetrievalCandidates,
+  type SearchOptions,
+  searchOptionsOf,
+} from "./document.js";
 
 export interface CollectionBuildResult {
   totalDocuments: number;
@@ -159,45 +169,74 @@ export class DocumentCollection {
   }
 
   /**
-   * Semantic search across all documents in the collection.
+   * Search across all documents in the collection. `mode` picks vector
+   * (default), keyword or hybrid retrieval.
    */
   async search(query: string, options: SearchOptions = {}): Promise<SearchResult[]> {
+    const topK = options.topK ?? this.config.topK;
+    const scoreThreshold = options.scoreThreshold ?? this.config.scoreThreshold;
+    const plan = resolveRetrievalPlan(this.config.retrieval, options, topK, scoreThreshold);
+
     await this.ensureReady();
     if (this.documents.size === 0) {
       return [];
     }
-
-    const topK = options.topK ?? this.config.topK;
-    const scoreThreshold = options.scoreThreshold ?? this.config.scoreThreshold;
-
-    const settled = await Promise.allSettled(
-      Array.from(this.documents.values()).map((doc) =>
-        doc.search(query, { topK: topK * 2, scoreThreshold }),
-      ),
-    );
-
-    const allHits: SearchResult[] = [];
-    const failures: unknown[] = [];
     const docs = Array.from(this.documents.values());
+
+    if (plan.mode === "vector") {
+      const perDoc = await this.settle(docs, (doc) =>
+        doc.search(query, { topK: topK * 2, scoreThreshold, mode: "vector" }),
+      );
+      const allHits = perDoc.flat();
+      allHits.sort((a, b) => b.score - a.score);
+      return allHits.slice(0, topK);
+    }
+
+    // BM25 statistics are per document, so fusing each document separately
+    // and then merging would compare unrelated fused ranks. Instead merge all
+    // vector lists (cosine scores are comparable) and all keyword lists, then
+    // fuse once.
+    const perDoc = await this.settle<RetrievalCandidates>(docs, (doc) =>
+      doc.retrieveCandidates(query, plan),
+    );
+    const vector = perDoc.flatMap((c) => c.vector).sort(byScoreThenId);
+    const keywordLists = perDoc.flatMap((c) => (c.keyword ? [c.keyword] : []));
+    if (keywordLists.length === 0) {
+      return vector.slice(0, topK);
+    }
+    const keyword: KeywordHit[] = keywordLists.flat().sort(byScoreThenId);
+    return reciprocalRankFusion(
+      fusionLists(plan, {
+        vector: vector.slice(0, plan.candidates),
+        keyword: keyword.slice(0, plan.candidates),
+      }),
+      plan.rrfK,
+      topK,
+    );
+  }
+
+  /**
+   * Runs `fn` on every document. One broken document should not hide results
+   * from the others, but if every document failed the caller needs the
+   * error, not an empty list.
+   */
+  private async settle<T>(docs: Document[], fn: (doc: Document) => Promise<T>): Promise<T[]> {
+    const settled = await Promise.allSettled(docs.map(fn));
+    const values: T[] = [];
+    const failures: unknown[] = [];
     settled.forEach((res, i) => {
       if (res.status === "fulfilled") {
-        allHits.push(...res.value);
+        values.push(res.value);
         return;
       }
       failures.push(res.reason);
       const errMsg = res.reason instanceof Error ? res.reason.message : String(res.reason);
       this.logger.warn(`Search failed for document "${docs[i]!.filePath}": ${errMsg}`);
     });
-
-    // One broken document should not hide results from the others, but if
-    // every document failed the caller needs the error, not an empty list.
     if (failures.length === settled.length) {
       throw failures[0];
     }
-
-    allHits.sort((a, b) => b.score - a.score);
-
-    return allHits.slice(0, topK);
+    return values;
   }
 
   /**
@@ -211,10 +250,7 @@ export class DocumentCollection {
       );
     }
 
-    const context = await this.search(question, {
-      topK: options.topK ?? this.config.topK,
-      scoreThreshold: options.scoreThreshold ?? this.config.scoreThreshold,
-    });
+    const context = await this.search(question, searchOptionsOf(options));
     if (context.length === 0) {
       throw new RagLiteError(
         "No relevant context found in document collection to answer question.",
@@ -244,10 +280,7 @@ export class DocumentCollection {
       );
     }
 
-    const context = await this.search(question, {
-      topK: options.topK ?? this.config.topK,
-      scoreThreshold: options.scoreThreshold ?? this.config.scoreThreshold,
-    });
+    const context = await this.search(question, searchOptionsOf(options));
     if (context.length === 0) {
       throw new RagLiteError(
         "No relevant context found in document collection to answer question.",

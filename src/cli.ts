@@ -7,6 +7,7 @@ import type {
   EmbeddingProviderName,
   LLMProviderConfig,
   LLMProviderName,
+  RetrievalMode,
   VectorStoreProviderConfig,
   VectorStoreProviderName,
 } from "./types.js";
@@ -16,11 +17,11 @@ const HELP = `raglite v${PACKAGE_VERSION}
 Usage:
   raglite index <path|url>   [--chunk-size N] [--overlap N] [--embed-provider P] [--embed-model M] [--embed-key K] [--rebuild]
                              [--vector-provider P] [--vector-url U] [--vector-key K] [--vector-index I] [--vector-store-dir D]
-  raglite search <path|url> "query"   [--top-k N]
+  raglite search <path|url> "query"   [--top-k N] [--mode vector|keyword|hybrid]
                              [--vector-provider P] [--vector-url U] [--vector-key K] [--vector-index I] [--vector-store-dir D]
-  raglite ask <path|url> "question"   --llm-provider P [--llm-model M] [--llm-key K] [--stream]
+  raglite ask <path|url> "question"   --llm-provider P [--llm-model M] [--llm-key K] [--stream] [--mode M]
                              [--vector-provider P] [--vector-url U] [--vector-key K] [--vector-index I] [--vector-store-dir D]
-  raglite serve <path|url>            --llm-provider P [--llm-key K] [--host H] [--port N] [--token T]
+  raglite serve <path|url>            --llm-provider P [--llm-key K] [--host H] [--port N] [--token T] [--mode M]
                              [--vector-provider P] [--vector-url U] [--vector-key K] [--vector-index I] [--vector-store-dir D]
   raglite --help
   raglite --version
@@ -45,6 +46,10 @@ async function main(): Promise<void> {
   const command = argv[0]!;
   const rest = argv.slice(1);
 
+  // Library progress logs use console.log; keep stdout for the command's
+  // output so `raglite search ... | jq` gets valid JSON.
+  console.log = console.error;
+
   switch (command) {
     case "index":
       return runIndex(rest);
@@ -60,7 +65,13 @@ async function main(): Promise<void> {
   }
 }
 
-function parseCommonEmbedding(values: Record<string, unknown>): EmbeddingProviderConfig {
+/** Undefined when no --embed-* flag is given, so an existing index keeps its provider. */
+function parseCommonEmbedding(
+  values: Record<string, unknown>,
+): EmbeddingProviderConfig | undefined {
+  if (!values["embed-provider"] && !values["embed-model"] && !values["embed-key"]) {
+    return undefined;
+  }
   const provider = (values["embed-provider"] as string | undefined) ?? "local";
   const config: EmbeddingProviderConfig = {
     provider: provider as EmbeddingProviderName,
@@ -68,6 +79,13 @@ function parseCommonEmbedding(values: Record<string, unknown>): EmbeddingProvide
   if (values["embed-model"]) config.model = values["embed-model"] as string;
   if (values["embed-key"]) config.apiKey = values["embed-key"] as string;
   return config;
+}
+
+function embeddingOption(values: Record<string, unknown>): {
+  embeddings?: EmbeddingProviderConfig;
+} {
+  const embeddings = parseCommonEmbedding(values);
+  return embeddings ? { embeddings } : {};
 }
 
 function parseLLM(values: Record<string, unknown>): LLMProviderConfig | undefined {
@@ -90,6 +108,17 @@ function parseVectorStore(values: Record<string, unknown>): VectorStoreProviderC
   if (values["vector-index"]) config.indexName = values["vector-index"] as string;
   if (values["vector-store-dir"]) config.storeDir = values["vector-store-dir"] as string;
   return config;
+}
+
+const MODES: ReadonlySet<string> = new Set(["vector", "keyword", "hybrid"]);
+
+function parseMode(values: Record<string, unknown>): RetrievalMode | undefined {
+  const mode = values.mode as string | undefined;
+  if (mode === undefined) return undefined;
+  if (!MODES.has(mode)) {
+    throw new Error(`--mode must be one of vector, keyword, hybrid (got "${mode}")`);
+  }
+  return mode as RetrievalMode;
 }
 
 const COMMON_VECTOR_OPTIONS = {
@@ -117,7 +146,7 @@ async function runIndex(args: string[]): Promise<void> {
   const pathOrUrl = requirePositional(positionals, 0, "path|url");
 
   const collection = new DocumentCollection(pathOrUrl, {
-    embeddings: parseCommonEmbedding(values),
+    ...embeddingOption(values),
     vectorStore: parseVectorStore(values),
   });
   const result = await collection.build({
@@ -134,6 +163,7 @@ async function runSearch(args: string[]): Promise<void> {
     allowPositionals: true,
     options: {
       "top-k": { type: "string" },
+      mode: { type: "string" },
       "embed-provider": { type: "string" },
       "embed-model": { type: "string" },
       "embed-key": { type: "string" },
@@ -142,13 +172,15 @@ async function runSearch(args: string[]): Promise<void> {
   });
   const pathOrUrl = requirePositional(positionals, 0, "path|url");
   const query = requirePositional(positionals, 1, "query");
+  const mode = parseMode(values);
 
   const collection = new DocumentCollection(pathOrUrl, {
-    embeddings: parseCommonEmbedding(values),
+    ...embeddingOption(values),
     vectorStore: parseVectorStore(values),
   });
   const results = await collection.search(query, {
     ...(values["top-k"] ? { topK: Number(values["top-k"]) } : {}),
+    ...(mode ? { mode } : {}),
   });
   process.stdout.write(`${JSON.stringify(results, null, 2)}\n`);
 }
@@ -166,6 +198,7 @@ async function runAsk(args: string[]): Promise<void> {
       "llm-model": { type: "string" },
       "llm-key": { type: "string" },
       stream: { type: "boolean" },
+      mode: { type: "string" },
       ...COMMON_VECTOR_OPTIONS,
     },
   });
@@ -175,13 +208,15 @@ async function runAsk(args: string[]): Promise<void> {
   const llm = parseLLM(values);
   if (!llm) throw new Error("--llm-provider is required for `ask`");
   const collection = new DocumentCollection(pathOrUrl, {
-    embeddings: parseCommonEmbedding(values),
+    ...embeddingOption(values),
     llm,
     vectorStore: parseVectorStore(values),
   });
 
   const opts: Parameters<DocumentCollection["ask"]>[1] = {};
   if (values["top-k"]) opts.topK = Number(values["top-k"]);
+  const mode = parseMode(values);
+  if (mode) opts.mode = mode;
 
   if (values.stream) {
     for await (const chunk of collection.askStream(question, opts)) {
@@ -208,15 +243,18 @@ async function runServe(args: string[]): Promise<void> {
       host: { type: "string" },
       port: { type: "string" },
       token: { type: "string" },
+      mode: { type: "string" },
       ...COMMON_VECTOR_OPTIONS,
     },
   });
   const pathOrUrl = requirePositional(positionals, 0, "path|url");
   const llm = parseLLM(values);
+  const mode = parseMode(values);
   const collection = new DocumentCollection(pathOrUrl, {
-    embeddings: parseCommonEmbedding(values),
+    ...embeddingOption(values),
     ...(llm ? { llm } : {}),
     vectorStore: parseVectorStore(values),
+    ...(mode ? { retrieval: { mode } } : {}),
   });
   await collection.build();
 
