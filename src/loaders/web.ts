@@ -1,3 +1,4 @@
+import { PACKAGE_VERSION } from "../constants.js";
 import { LoaderError } from "../errors.js";
 import { BaseLoader } from "./base.js";
 
@@ -13,7 +14,7 @@ export class WebLoader extends BaseLoader {
     try {
       const response = await fetch(this.url, {
         headers: {
-          "User-Agent": "RAGLite/1.1.0 (Mozilla/5.0 compatible)",
+          "User-Agent": `RAGLite/${PACKAGE_VERSION} (Mozilla/5.0 compatible)`,
           Accept: "text/html,text/plain,application/xhtml+xml;q=0.9,*/*;q=0.8",
         },
       });

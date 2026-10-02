@@ -154,6 +154,60 @@ describe("Custom Vector DBs", () => {
       await store.reset();
       expect(store.count()).toBe(0);
     });
+
+    it("scopes reset, search and metadata to its namespace in a shared collection", async () => {
+      const calls: { url: string; method?: string; body?: Record<string, unknown> }[] = [];
+      globalThis.fetch = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+        calls.push({
+          url,
+          method: init?.method,
+          body: init?.body ? JSON.parse(init.body as string) : undefined,
+        });
+        if (url.endsWith("/points/search")) {
+          return new Response(JSON.stringify({ result: [] }), { status: 200 });
+        }
+        if (url.endsWith("/collections/shared") && init?.method === "GET") {
+          return new Response(null, { status: 200 });
+        }
+        return new Response(JSON.stringify({ result: [] }), { status: 200 });
+      });
+
+      const config = {
+        provider: "qdrant" as const,
+        url: "http://qdrant:6333",
+        indexName: "shared",
+      };
+      const a = new QdrantVectorStore(config, "ns-a");
+      const b = new QdrantVectorStore(config, "ns-b");
+
+      await a.reset();
+      expect(calls.some((c) => c.method === "DELETE")).toBe(false);
+      const del = calls.find((c) => c.url.includes("/collections/shared/points/delete"));
+      expect(JSON.stringify(del?.body)).toContain('"value":"ns-a"');
+
+      await a.add([
+        {
+          id: "ns-a_000001",
+          text: "hello",
+          embedding: [1, 0, 0],
+          metadata: { source: "a.txt", chunk: 1, totalChunks: 1 },
+        },
+      ]);
+      const upsert = calls.find((c) => c.url.includes("/points?wait=true"));
+      expect(JSON.stringify(upsert?.body)).toContain('"namespace":"ns-a"');
+
+      await a.search([1, 0, 0], 3);
+      const search = calls.find((c) => c.url.endsWith("/points/search"));
+      expect(JSON.stringify(search?.body?.filter)).toContain('"value":"ns-a"');
+
+      await a.readIndexMetadata();
+      await b.readIndexMetadata();
+      const metaIds = calls
+        .filter((c) => c.url.endsWith("/collections/shared/points") && c.method === "POST")
+        .map((c) => (c.body?.ids as string[] | undefined)?.[0]);
+      expect(metaIds).toHaveLength(2);
+      expect(metaIds[0]).not.toBe(metaIds[1]);
+    });
   });
 
   describe("PineconeVectorStore", () => {
