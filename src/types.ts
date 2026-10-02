@@ -56,7 +56,10 @@ export interface SearchResult {
 }
 
 export interface IndexMetadata {
+  /** Package version that built the index (informational). */
   version: string;
+  /** Index layout version; see INDEX_FORMAT_VERSION. Absent on indexes built before 1.2.2. */
+  formatVersion?: number;
   source: string;
   sourceHash: string;
   chunkSize: number;

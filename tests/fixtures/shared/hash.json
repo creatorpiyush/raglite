@@ -1,0 +1,34 @@
+{
+  "hashString": [
+    {
+      "input": "",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "input": "hello",
+      "sha256": "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+    },
+    {
+      "input": "Refunds 30 días — 返金 🚀",
+      "sha256": "8c0b6fdd3be678888cf2ab1a1f688435999e249e317f809cd444616b147dba9f"
+    },
+    {
+      "input": "line1\r\nline2",
+      "sha256": "d14a91a6d1c6ee83bf0c774ebecbee6d8b393b395dae29eea839c354d6fba9c0"
+    }
+  ],
+  "namespaceFromPath": [
+    {
+      "input": "/tmp/docs/policy.pdf",
+      "namespace": "1b0f23231e019b65"
+    },
+    {
+      "input": "C:\\docs\\policy.pdf",
+      "namespace": "b0ea2bdcc7ddf050"
+    },
+    {
+      "input": "https://example.com/policy",
+      "namespace": "fd4f660e25200691"
+    }
+  ]
+}

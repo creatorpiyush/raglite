@@ -125,9 +125,9 @@ graph TD
 ### 4.1 Ingestion & Indexing
 1. `doc.build()` invokes the appropriate `DocumentLoader` based on file extension (`.pdf`, `.txt`, `.json`, `.md`, `.docx`).
 2. Calculates SHA-256 hash of raw document content.
-3. Checks existing `IndexMetadata` in `VectorStore`. If hash matches, skips re-indexing.
+3. Checks existing `IndexMetadata` in `VectorStore`. The cached index is reused when the index format version, content hash, chunk size, overlap and embedding provider/model all match (URL sources are hashed by their fetched text).
 4. If hash differs or force rebuild requested:
-   - `RecursiveCharacterTextSplitter` chunks text (default size 1000, overlap 200).
+   - `RecursiveChunker` splits text into word-based chunks (default 500 words, 50-word overlap).
    - `EmbeddingFactory` generates normalized vectors for each chunk.
    - `VectorStore.add()` saves chunks and `VectorStore.saveIndexMetadata()` persists index metadata.
 
@@ -160,12 +160,13 @@ Built using **Hono** framework for high performance and lightweight execution.
 
 ```ts
 export interface VectorStore {
-  load(docId: string): Promise<void>;
-  reset(docId: string): Promise<void>;
-  add(docId: string, chunks: StoredChunk[]): Promise<void>;
-  search(docId: string, queryVector: number[], topK: number, minScore?: number): Promise<SearchResult[]>;
-  count(docId: string): Promise<number>;
-  saveIndexMetadata(docId: string, meta: IndexMetadata): Promise<void>;
-  readIndexMetadata(docId: string): Promise<IndexMetadata | null>;
+  readonly namespace: string;
+  load(): Promise<void>;
+  reset(): Promise<void>;
+  add(chunks: StoredChunk[]): Promise<void>;
+  search(embedding: number[], topK: number): Promise<VectorSearchHit[]>;
+  count(): number;
+  saveIndexMetadata(metadata: IndexMetadata): Promise<void>;
+  readIndexMetadata(): Promise<IndexMetadata | null>;
 }
 ```

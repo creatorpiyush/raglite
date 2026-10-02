@@ -1,6 +1,8 @@
+import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { EmbeddingProviderConfig } from "../../src/types.js";
+import { INDEX_FORMAT_VERSION } from "../../src/constants.js";
+import type { EmbeddingProviderConfig, IndexMetadata } from "../../src/types.js";
 import { MockEmbedder } from "../helpers/mock-embedder.js";
 import { makeTempWorkspace, type TempWorkspace } from "../helpers/tmp.js";
 
@@ -119,5 +121,50 @@ describe("DocumentCollection.search failures", () => {
     }
 
     await expect(collection.search("refund")).rejects.toThrow("bad api key");
+  });
+});
+
+describe("Index format version", () => {
+  async function buildThenEdit(edit: (meta: IndexMetadata) => void) {
+    const path = ws.file("policy.txt", "Refunds are issued within 30 days.");
+    const opts = { storeDir: join(ws.root, ".raglite"), logLevel: "silent" as const };
+    const doc = new Document(path, opts);
+    await doc.build();
+    const metaPath = join(ws.root, ".raglite", doc.storeNamespace, "metadata.json");
+    const meta = JSON.parse(readFileSync(metaPath, "utf-8")) as IndexMetadata;
+    expect(meta.formatVersion).toBe(INDEX_FORMAT_VERSION);
+    edit(meta);
+    writeFileSync(metaPath, JSON.stringify(meta), "utf-8");
+    return new Document(path, opts).build();
+  }
+
+  it("reuses an index built by a different package version", async () => {
+    const result = await buildThenEdit((meta) => {
+      meta.version = "9.9.9";
+    });
+    expect(result.cached).toBe(true);
+  });
+
+  it("reuses a 1.2.1 index that predates formatVersion", async () => {
+    const result = await buildThenEdit((meta) => {
+      meta.version = "1.2.1";
+      meta.formatVersion = undefined;
+    });
+    expect(result.cached).toBe(true);
+  });
+
+  it("rebuilds an older index without formatVersion", async () => {
+    const result = await buildThenEdit((meta) => {
+      meta.version = "1.2.0";
+      meta.formatVersion = undefined;
+    });
+    expect(result.cached).toBe(false);
+  });
+
+  it("rebuilds an index with a different formatVersion", async () => {
+    const result = await buildThenEdit((meta) => {
+      meta.formatVersion = INDEX_FORMAT_VERSION + 1;
+    });
+    expect(result.cached).toBe(false);
   });
 });
