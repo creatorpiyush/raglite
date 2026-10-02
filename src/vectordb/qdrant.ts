@@ -20,6 +20,13 @@ export class QdrantVectorStore implements VectorStore {
   private readonly url: string;
   private readonly apiKey?: string;
   private readonly collectionName: string;
+  /**
+   * True when `indexName` is set: several namespaces may then live in one
+   * collection, so every operation must be scoped to this namespace instead
+   * of touching the whole collection.
+   */
+  private readonly shared: boolean;
+  private readonly metadataId: string;
   private cachedCount = 0;
 
   constructor(config: VectorStoreProviderConfig, namespace: string) {
@@ -27,6 +34,12 @@ export class QdrantVectorStore implements VectorStore {
     this.url = (config.url ?? "http://127.0.0.1:6333").replace(/\/$/, "");
     this.apiKey = config.apiKey;
     this.collectionName = config.indexName ?? `raglite_${namespace}`;
+    this.shared = config.indexName !== undefined;
+    this.metadataId = this.shared ? stringToUuid(`${namespace}__metadata__`) : METADATA_UUID;
+  }
+
+  private get namespaceFilter() {
+    return { must: [{ key: "namespace", match: { value: this.namespace } }] };
   }
 
   private get headers(): Record<string, string> {
@@ -47,12 +60,18 @@ export class QdrantVectorStore implements VectorStore {
   async reset(): Promise<void> {
     this.cachedCount = 0;
     try {
-      const res = await fetch(`${this.url}/collections/${this.collectionName}`, {
-        method: "DELETE",
-        headers: this.headers,
-      });
+      const res = this.shared
+        ? await fetch(`${this.url}/collections/${this.collectionName}/points/delete?wait=true`, {
+            method: "POST",
+            headers: this.headers,
+            body: JSON.stringify({ filter: this.namespaceFilter }),
+          })
+        : await fetch(`${this.url}/collections/${this.collectionName}`, {
+            method: "DELETE",
+            headers: this.headers,
+          });
       if (res.status !== 200 && res.status !== 404) {
-        throw new Error(`Delete collection failed: ${res.statusText}`);
+        throw new Error(`Delete failed: ${res.statusText}`);
       }
     } catch (cause) {
       throw new VectorDBError(`Failed to delete Qdrant collection ${this.collectionName}`, {
@@ -100,6 +119,7 @@ export class QdrantVectorStore implements VectorStore {
       vector: c.embedding,
       payload: {
         id: c.id,
+        namespace: this.namespace,
         text: c.text,
         metadata: c.metadata,
       },
@@ -133,6 +153,7 @@ export class QdrantVectorStore implements VectorStore {
           vector: embedding,
           limit: topK + 1, // +1 in case metadata point matches
           with_payload: true,
+          ...(this.shared ? { filter: this.namespaceFilter } : {}),
         }),
       });
       if (res.status !== 200) {
@@ -153,7 +174,7 @@ export class QdrantVectorStore implements VectorStore {
 
       const hits: VectorSearchHit[] = [];
       for (const r of data.result) {
-        if (r.id === METADATA_UUID || r.payload?.isMetadata) continue;
+        if (r.id === this.metadataId || r.payload?.isMetadata) continue;
         hits.push({
           id: r.payload?.id ?? r.id,
           text: r.payload?.text ?? "",
@@ -182,10 +203,11 @@ export class QdrantVectorStore implements VectorStore {
 
     const zeroVector = new Array(dims).fill(0);
     const point = {
-      id: METADATA_UUID,
+      id: this.metadataId,
       vector: zeroVector,
       payload: {
         isMetadata: true,
+        namespace: this.namespace,
         metadata,
       },
     };
@@ -214,7 +236,7 @@ export class QdrantVectorStore implements VectorStore {
         method: "POST",
         headers: this.headers,
         body: JSON.stringify({
-          ids: [METADATA_UUID],
+          ids: [this.metadataId],
           with_payload: true,
         }),
       });

@@ -124,6 +124,7 @@ const doc = new Document("./policy.pdf", {
 
 ### Qdrant (Local or Cloud)
 Supports both local instances (e.g. running via Docker) and Qdrant Cloud clusters.
+By default each document gets its own collection (`raglite_<namespace>`). Set `indexName` to keep several documents in one shared collection; each document's points are tagged with its namespace, so rebuilding one document never affects the others.
 ```ts
 const doc = new Document("./policy.pdf", {
   vectorStore: {

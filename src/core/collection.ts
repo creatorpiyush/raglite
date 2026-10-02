@@ -2,7 +2,7 @@ import { existsSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import { createServer, type ServeOptions, type ServerHandle } from "../api/index.js";
 import { type DocumentOptions, type ResolvedConfig, resolveConfig } from "../config.js";
-import { RagLiteError } from "../errors.js";
+import { ConfigError, RagLiteError } from "../errors.js";
 import {
   type AnswerResult,
   generateAnswer,
@@ -109,6 +109,16 @@ export class DocumentCollection {
       }
     }
 
+    // A VectorStore instance has a single namespace, so every document would
+    // share it and each build() would reset the previous document's index.
+    const vectorStore = this.options.vectorStore;
+    if (vectorStore && !("provider" in vectorStore) && new Set(fileList).size > 1) {
+      throw new ConfigError(
+        "A VectorStore instance cannot be shared by multiple documents in a DocumentCollection. " +
+          'Pass a vector store provider config (e.g. { provider: "qdrant", ... }) instead.',
+      );
+    }
+
     let totalChunks = 0;
     let cachedDocs = 0;
     let newDocs = 0;
@@ -160,16 +170,30 @@ export class DocumentCollection {
     const topK = options.topK ?? this.config.topK;
     const scoreThreshold = options.scoreThreshold ?? this.config.scoreThreshold;
 
-    const searchPromises = Array.from(this.documents.values()).map(async (doc) => {
-      try {
-        return await doc.search(query, { topK: topK * 2, scoreThreshold });
-      } catch {
-        return [];
+    const settled = await Promise.allSettled(
+      Array.from(this.documents.values()).map((doc) =>
+        doc.search(query, { topK: topK * 2, scoreThreshold }),
+      ),
+    );
+
+    const allHits: SearchResult[] = [];
+    const failures: unknown[] = [];
+    const docs = Array.from(this.documents.values());
+    settled.forEach((res, i) => {
+      if (res.status === "fulfilled") {
+        allHits.push(...res.value);
+        return;
       }
+      failures.push(res.reason);
+      const errMsg = res.reason instanceof Error ? res.reason.message : String(res.reason);
+      this.logger.warn(`Search failed for document "${docs[i]!.filePath}": ${errMsg}`);
     });
 
-    const resultsArray = await Promise.all(searchPromises);
-    const allHits: SearchResult[] = resultsArray.flat();
+    // One broken document should not hide results from the others, but if
+    // every document failed the caller needs the error, not an empty list.
+    if (failures.length === settled.length) {
+      throw failures[0];
+    }
 
     allHits.sort((a, b) => b.score - a.score);
 

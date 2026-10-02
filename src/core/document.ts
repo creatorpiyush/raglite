@@ -100,9 +100,13 @@ export class Document {
 
     await this.store.load();
     const existing = await this.store.readIndexMetadata();
-    const sourceHash = isUrl(this.filePath)
-      ? hashString(this.filePath)
-      : await hashFile(this.filePath);
+    // Web pages change without their URL changing, so fingerprint the
+    // fetched content rather than the URL.
+    let text: string | null = null;
+    if (isUrl(this.filePath)) {
+      text = await getLoader(this.filePath).load();
+    }
+    const sourceHash = text !== null ? hashString(text) : await hashFile(this.filePath);
 
     if (
       !options.rebuild &&
@@ -130,8 +134,7 @@ export class Document {
     await this.store.reset();
     await this.store.load();
 
-    const loader = getLoader(this.filePath);
-    const text = await loader.load();
+    text ??= await getLoader(this.filePath).load();
     if (!text) {
       throw new LoaderError(`Loader returned empty text for ${this.filePath}`);
     }
@@ -294,20 +297,30 @@ export class Document {
         `No RagLite index found for "${this.filePath}". Call build() first.`,
       );
     }
-    this.embedder ??= await createEmbedder({
-      provider: this.config.embeddings.provider,
-      ...(this.config.embeddings.model !== undefined
-        ? { model: this.config.embeddings.model }
-        : { model: existing.embeddingModel }),
-      ...(this.config.embeddings.apiKey !== undefined
-        ? { apiKey: this.config.embeddings.apiKey }
-        : {}),
-      ...(this.config.embeddings.baseURL !== undefined
-        ? { baseURL: this.config.embeddings.baseURL }
-        : {}),
-    });
+    this.embedder ??= await createEmbedder(queryEmbeddingsConfig(existing, this.config.embeddings));
     this.ready = true;
   }
+}
+
+/**
+ * Queries must be embedded with the same provider and model as the index,
+ * which may differ from the constructor default when `build({ embeddings })`
+ * overrode it. Credentials from the configured provider are reused when it
+ * matches; otherwise the provider falls back to its environment variables.
+ */
+function queryEmbeddingsConfig(
+  existing: IndexMetadata,
+  configured: EmbeddingProviderConfig,
+): EmbeddingProviderConfig {
+  const config: EmbeddingProviderConfig = {
+    provider: existing.embeddingProvider,
+    model: existing.embeddingModel,
+  };
+  if (configured.provider === existing.embeddingProvider) {
+    if (configured.apiKey !== undefined) config.apiKey = configured.apiKey;
+    if (configured.baseURL !== undefined) config.baseURL = configured.baseURL;
+  }
+  return config;
 }
 
 interface CacheCompareInputs {

@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.1] - 2026-10-02
+
+### Fixed
+- **Qdrant shared collections:** When `indexName` is set, documents sharing one Qdrant collection no longer wipe each other. `reset()`, search and index metadata are now scoped to each document's namespace instead of the whole collection. Without `indexName`, behaviour is unchanged.
+- **Shared `VectorStore` instances in collections:** `DocumentCollection.build()` now throws a `ConfigError` when a single `VectorStore` instance would be shared by more than one document, instead of each document silently resetting the previous one's index. Pass a vector store provider config instead.
+- **Web URL re-indexing:** URL sources are now fingerprinted by their fetched content rather than the URL string, so a changed page is re-indexed on the next `build()`.
+- **Query embedder after reload:** Searching an existing index in a new process now embeds queries with the provider and model the index was built with, rather than the constructor default. Configured credentials are reused when the provider matches.
+- **Collection search errors:** `DocumentCollection.search()` (and `ask`/`askStream`) now logs per-document search failures instead of silently dropping them, and throws if every document fails.
+- **Web loader User-Agent:** Now reports the actual package version.
+
+### Upgrade notes
+- As with every release, cached indexes are rebuilt once on first `build()` because the package version is part of the cache key.
+- Existing Qdrant indexes created with `indexName` are rebuilt once. Their old untagged points stay in the collection but are no longer returned by search; drop and recreate the collection to remove them.
+- Each `build()` on a URL source now fetches the page to check for changes, even when the cached index is reused.
+- When every document in a collection fails to search, the REST server now returns a 500 error instead of empty results.
+
 ## [1.2.0] - 2026-08-02
 
 ### Added

@@ -1,6 +1,8 @@
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildApp } from "../../src/api/server.js";
+import { ConfigError } from "../../src/errors.js";
+import { MemoryVectorStore } from "../../src/vectordb/memory.js";
 import { MockEmbedder } from "../helpers/mock-embedder.js";
 import { makeTempWorkspace, type TempWorkspace } from "../helpers/tmp.js";
 
@@ -48,6 +50,19 @@ describe("DocumentCollection", () => {
     const hits = await collection.search("Refund policy", { topK: 5 });
     expect(hits.length).toBeGreaterThan(0);
     expect(hits.some((h) => h.text.includes("Refunds are issued"))).toBe(true);
+  });
+
+  it("rejects a single VectorStore instance shared by multiple documents", async () => {
+    ws.file("policy.txt", SAMPLE1);
+    ws.file("shipping.md", SAMPLE2);
+
+    const store = new MemoryVectorStore(join(ws.root, ".raglite"), "shared");
+    const collection = new DocumentCollection(ws.root, {
+      vectorStore: store,
+      logLevel: "silent",
+    });
+
+    await expect(collection.build()).rejects.toThrow(ConfigError);
   });
 
   it("handles empty or invalid paths gracefully in collection build", async () => {
