@@ -1,0 +1,100 @@
+[
+  {
+    "name": "empty",
+    "text": "",
+    "chunkSize": 500,
+    "overlap": 50,
+    "chunks": []
+  },
+  {
+    "name": "whitespace only",
+    "text": " \n\t ",
+    "chunkSize": 500,
+    "overlap": 50,
+    "chunks": []
+  },
+  {
+    "name": "short text",
+    "text": "Refunds are issued within 30 days.",
+    "chunkSize": 500,
+    "overlap": 50,
+    "chunks": ["Refunds are issued within 30 days."]
+  },
+  {
+    "name": "sliding window",
+    "text": "w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12",
+    "chunkSize": 5,
+    "overlap": 2,
+    "chunks": ["w1 w2 w3 w4 w5", "w4 w5 w6 w7 w8", "w7 w8 w9 w10 w11", "w10 w11 w12"]
+  },
+  {
+    "name": "last window ends exactly",
+    "text": "w1 w2 w3 w4 w5 w6 w7 w8",
+    "chunkSize": 5,
+    "overlap": 2,
+    "chunks": ["w1 w2 w3 w4 w5", "w4 w5 w6 w7 w8"]
+  },
+  {
+    "name": "no overlap",
+    "text": "w1 w2 w3 w4 w5 w6 w7 w8 w9 w10",
+    "chunkSize": 4,
+    "overlap": 0,
+    "chunks": ["w1 w2 w3 w4", "w5 w6 w7 w8", "w9 w10"]
+  },
+  {
+    "name": "mixed whitespace collapses",
+    "text": "a\n\nb\t c   d\r\ne",
+    "chunkSize": 500,
+    "overlap": 50,
+    "chunks": ["a b c d e"]
+  },
+  {
+    "name": "no-break and ideographic spaces",
+    "text": "a b　c d",
+    "chunkSize": 2,
+    "overlap": 0,
+    "chunks": ["a b", "c d"]
+  },
+  {
+    "name": "byte order mark",
+    "text": "﻿alpha beta﻿gamma",
+    "chunkSize": 500,
+    "overlap": 50,
+    "chunks": ["alpha beta gamma"]
+  },
+  {
+    "name": "next line control",
+    "text": "alphabeta",
+    "chunkSize": 500,
+    "overlap": 50,
+    "chunks": ["alphabeta"]
+  },
+  {
+    "name": "file separator control",
+    "text": "alpha\u001cbeta",
+    "chunkSize": 500,
+    "overlap": 50,
+    "chunks": ["alpha\u001cbeta"]
+  },
+  {
+    "name": "accents and emoji",
+    "text": "café naïve 返金 🚀 ok",
+    "chunkSize": 2,
+    "overlap": 1,
+    "chunks": ["café naïve", "naïve 返金", "返金 🚀", "🚀 ok"]
+  },
+  {
+    "name": "unspaced CJK stays one word",
+    "text": "返金は三十日以内に行われます。配送には二営業日かかります。",
+    "chunkSize": 5,
+    "overlap": 1,
+    "chunks": ["返金は三十日以内に行われます。配送には二営業日かかります。"]
+  },
+  {
+    "name": "overlap not smaller than chunk size",
+    "text": "w1 w2 w3",
+    "chunkSize": 2,
+    "overlap": 2,
+    "error": true
+  }
+]

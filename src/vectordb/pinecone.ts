@@ -160,6 +160,7 @@ export class PineconeVectorStore implements VectorStore {
       metadata: {
         isMetadata: true,
         version: metadata.version,
+        ...(metadata.formatVersion !== undefined ? { formatVersion: metadata.formatVersion } : {}),
         source: metadata.source,
         sourceHash: metadata.sourceHash,
         chunkSize: metadata.chunkSize,
@@ -212,6 +213,7 @@ export class PineconeVectorStore implements VectorStore {
             metadata?: {
               isMetadata?: boolean;
               version?: string;
+              formatVersion?: number;
               source?: string;
               sourceHash?: string;
               chunkSize?: number;
@@ -230,6 +232,7 @@ export class PineconeVectorStore implements VectorStore {
         const m = record.metadata;
         const meta: IndexMetadata = {
           version: m.version ?? "",
+          ...(m.formatVersion !== undefined ? { formatVersion: m.formatVersion } : {}),
           source: m.source ?? "",
           sourceHash: m.sourceHash ?? "",
           chunkSize: m.chunkSize ?? 0,

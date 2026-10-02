@@ -3,7 +3,7 @@ import { basename, resolve } from "node:path";
 import { createServer, type ServeOptions, type ServerHandle } from "../api/index.js";
 import { RecursiveChunker } from "../chunking/index.js";
 import { type DocumentOptions, type ResolvedConfig, resolveConfig } from "../config.js";
-import { PACKAGE_VERSION } from "../constants.js";
+import { INDEX_FORMAT_VERSION, LEGACY_FORMAT_1_VERSIONS, PACKAGE_VERSION } from "../constants.js";
 import { createEmbedder, type Embedder } from "../embeddings/index.js";
 import { FileNotIndexedError, LoaderError, RagLiteError } from "../errors.js";
 import {
@@ -173,6 +173,7 @@ export class Document {
 
     const metadata: IndexMetadata = {
       version: PACKAGE_VERSION,
+      formatVersion: INDEX_FORMAT_VERSION,
       source: this.filePath,
       sourceHash,
       chunkSize,
@@ -330,8 +331,14 @@ interface CacheCompareInputs {
   embeddingsConfig: EmbeddingProviderConfig;
 }
 
+/** Indexes written before `formatVersion` existed are identified by package version. */
+export function indexFormatVersion(metadata: IndexMetadata): number | null {
+  if (typeof metadata.formatVersion === "number") return metadata.formatVersion;
+  return LEGACY_FORMAT_1_VERSIONS.has(metadata.version) ? 1 : null;
+}
+
 function cacheStillValid(existing: IndexMetadata, inputs: CacheCompareInputs): boolean {
-  if (existing.version !== PACKAGE_VERSION) return false;
+  if (indexFormatVersion(existing) !== INDEX_FORMAT_VERSION) return false;
   if (existing.sourceHash !== inputs.sourceHash) return false;
   if (existing.chunkSize !== inputs.chunkSize) return false;
   if (existing.overlap !== inputs.overlap) return false;
