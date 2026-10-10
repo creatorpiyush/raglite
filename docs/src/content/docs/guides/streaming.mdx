@@ -1,0 +1,120 @@
+---
+title: Streaming, progress and cancellation
+description: Stream answers as they are written, report build progress, and stop a build or request.
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+## Streaming answers
+
+`askStream()` / `ask_stream()` yield the answer's text as the LLM writes it. They take the same options as `ask()`.
+
+<Tabs syncKey="lang">
+<TabItem label="TypeScript">
+
+```ts
+for await (const delta of doc.askStream("Explain the introduction")) {
+  process.stdout.write(delta);
+}
+```
+
+</TabItem>
+<TabItem label="Python">
+
+```python
+for delta in doc.ask_stream("Explain the introduction"):
+    print(delta, end="", flush=True)
+print()
+```
+
+</TabItem>
+</Tabs>
+
+A stream yields text only. To get `citations` with a streamed answer, collect the text and call `extractCitations(text, hits)` (TypeScript) or `extract_citations(text, hits)` (Python) with the passages from `search()`, or use `ask()`. Over HTTP, send `"stream": true` to `/ask`; see [REST API](/raglite/guides/rest-api/).
+
+## Build progress
+
+Chunks are embedded in batches of 64. The progress callback runs after each batch with the document's `source`, the chunks `embedded` so far, and the `total`.
+
+<Tabs syncKey="lang">
+<TabItem label="TypeScript">
+
+```ts
+await collection.build({
+  onProgress: ({ source, embedded, total }) => console.log(`${source}: ${embedded}/${total}`),
+});
+```
+
+</TabItem>
+<TabItem label="Python">
+
+```python
+collection.build(
+    on_progress=lambda p: print(f"{p['source']}: {p['embedded']}/{p['total']}"),
+)
+```
+
+</TabItem>
+</Tabs>
+
+A document whose saved index is reused reports no progress: it needs no embedding.
+
+## Cancelling a build
+
+A cancelled build stops between embedding batches and **keeps the previous index**: the old index is replaced only once all chunks are embedded.
+
+<Tabs syncKey="lang">
+<TabItem label="TypeScript">
+
+Pass an `AbortSignal`. The build throws an `AbortError`.
+
+```ts
+const controller = new AbortController();
+setTimeout(() => controller.abort(), 30_000);
+
+try {
+  await collection.build({ signal: controller.signal });
+} catch (err) {
+  if ((err as Error).name !== "AbortError") throw err;
+}
+```
+
+</TabItem>
+<TabItem label="Python">
+
+Pass a `threading.Event`, and set it from another thread. The build raises `BuildCancelledError`.
+
+```python
+import threading
+from raglite import BuildCancelledError
+
+cancel = threading.Event()
+threading.Timer(30, cancel.set).start()
+
+try:
+    collection.build(cancel=cancel)
+except BuildCancelledError:
+    pass
+```
+
+</TabItem>
+</Tabs>
+
+## Cancelling a request
+
+<Tabs syncKey="lang">
+<TabItem label="TypeScript">
+
+`ask()` and `askStream()` take the same `signal`, which cancels the LLM request:
+
+```ts
+await doc.ask("Summarize the document", { signal: AbortSignal.timeout(20_000) });
+```
+
+</TabItem>
+<TabItem label="Python">
+
+Stop reading from `ask_stream()` to stop a streamed answer. `ask()` has no cancel option.
+
+</TabItem>
+</Tabs>

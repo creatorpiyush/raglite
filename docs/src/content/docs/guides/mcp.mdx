@@ -1,0 +1,130 @@
+---
+title: MCP server
+description: Give Claude Code, Claude Desktop, Cursor or VS Code search over your documents.
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+`raglite mcp` serves your documents to any [MCP](https://modelcontextprotocol.io) client over stdio. The agent can then search them, list them, and (when you give it an LLM) ask questions about them.
+
+## Claude Code
+
+<Tabs syncKey="lang">
+<TabItem label="TypeScript">
+
+`npx` fetches everything it needs, including the MCP SDK and local embeddings:
+
+```bash
+claude mcp add docs -- npx -y -p raglite-toolkit -p @modelcontextprotocol/sdk -p @huggingface/transformers \
+  raglite mcp /absolute/path/to/docs --store-dir /absolute/path/to/raglite-index
+```
+
+</TabItem>
+<TabItem label="Python">
+
+```bash
+pip install 'raglite-toolkit[mcp,local]'
+claude mcp add docs -- raglite mcp /absolute/path/to/docs --store-dir /absolute/path/to/raglite-index
+```
+
+</TabItem>
+</Tabs>
+
+## Claude Desktop, Cursor and VS Code
+
+They use the same command in their MCP settings file:
+
+<Tabs syncKey="lang">
+<TabItem label="TypeScript">
+
+```json
+{
+  "mcpServers": {
+    "docs": {
+      "command": "npx",
+      "args": [
+        "-y", "-p", "raglite-toolkit", "-p", "@modelcontextprotocol/sdk", "-p", "@huggingface/transformers",
+        "raglite", "mcp", "/absolute/path/to/docs", "--store-dir", "/absolute/path/to/raglite-index"
+      ]
+    }
+  }
+}
+```
+
+In a project that already has `raglite-toolkit` and `@modelcontextprotocol/sdk` installed, `npx raglite mcp ./docs --store-dir ./.raglite` is enough.
+
+</TabItem>
+<TabItem label="Python">
+
+```json
+{
+  "mcpServers": {
+    "docs": {
+      "command": "raglite",
+      "args": ["mcp", "/absolute/path/to/docs", "--store-dir", "/absolute/path/to/raglite-index"]
+    }
+  }
+}
+```
+
+If `raglite` is not on the client's `PATH`, use its full path, for example `/path/to/.venv/bin/raglite`.
+
+</TabItem>
+</Tabs>
+
+- **Use absolute paths, and pass `--store-dir`.** MCP clients may start the server in any directory, and the index is kept in `./.raglite` by default.
+- **Run the command once in a terminal first.** The first start indexes the documents (and, with `npx`, installs packages), which can take longer than a client waits. Stop it with Ctrl+C once it is ready; later starts reuse the index.
+- Add `--embed-provider`, `--embed-model` and `--embed-key` to use a hosted embedding model, as with [`raglite index`](/raglite/guides/cli/).
+
+## Tools
+
+| Tool | Inputs | Returns |
+| --- | --- | --- |
+| `search` | `query`; optional `topK` (1–50, default 5) and `mode` (`vector`, `keyword`, `hybrid`) | JSON passages: `source`, `chunk`, `page`, `section`, `score`, `text` |
+| `list_sources` | none | JSON list: `source` (file name or URL), `path`, `chunks` |
+| `ask` | `question`; optional `topK` and `mode` | The answer, citing passages as `[1]`, `[2]` |
+
+`ask` is offered only when the server has an LLM: pass `--llm-provider` (and `--llm-model`, `--llm-key` as needed). Without one, the client's own model reads the `search` results, which is usually what you want.
+
+`--mode` sets the default retrieval mode for both tools.
+
+## From code
+
+<Tabs syncKey="lang">
+<TabItem label="TypeScript">
+
+```ts
+import { DocumentCollection, createMcpServer, serveMcp } from "raglite-toolkit";
+
+const docs = new DocumentCollection("./docs");
+await docs.build();
+
+await serveMcp(docs); // stdio, until the client disconnects
+
+// Or get the McpServer and connect your own transport:
+const server = await createMcpServer(docs, { llm: { provider: "anthropic" } });
+```
+
+Needs `npm install @modelcontextprotocol/sdk`.
+
+</TabItem>
+<TabItem label="Python">
+
+```python
+from raglite import DocumentCollection, create_mcp_server, serve_mcp
+
+docs = DocumentCollection("./docs")
+docs.build()
+
+serve_mcp(docs)  # stdio, until the client disconnects
+
+# Or get the MCPServer and run another transport:
+server = create_mcp_server(docs, llm={"provider": "anthropic"})
+```
+
+Needs the `[mcp]` extra.
+
+</TabItem>
+</Tabs>
+
+stdout carries the MCP protocol, so RAGLite's logs go to stderr.

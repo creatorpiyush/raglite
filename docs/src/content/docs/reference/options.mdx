@@ -1,0 +1,133 @@
+---
+title: Options and types
+description: Every option, result type and error class, in both SDKs.
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+Option names are the same in both SDKs: Python takes them as dict keys (`{"topK": 3}`). Python methods also take common options as keyword arguments, such as `search(q, top_k=3)` and `build(rebuild=True)`.
+
+## Document and collection options
+
+`new Document(path, options)`, `Document.fromText(id, text, options)` and `new DocumentCollection(sources, options)` take:
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `embeddings` | the existing index's, else `{ provider: "local" }` | `{ provider, model?, apiKey?, baseURL? }`. See [Choosing providers](/raglite/providers/) |
+| `llm` | none | `{ provider, model?, apiKey?, baseURL?, temperature?, maxTokens? }`. Needed by `ask()` |
+| `chunkSize` | the existing index's, else `500` | Words per chunk; characters for text without spaces (Chinese, Japanese, Thai, ...) |
+| `overlap` | the existing index's, else `50` | Overlap between chunks, in the same units |
+| `topK` | `5` | Results returned by `search()` and passages given to `ask()` |
+| `scoreThreshold` | `0` | Minimum cosine similarity (0..1) |
+| `retrieval` | `{ mode: "vector" }` | Default `mode` and `hybrid` options. See [Hybrid search](/raglite/guides/hybrid-search/) |
+| `storeDir` | `".raglite"` | Where indexes are saved |
+| `vectorStore` | memory store | A provider config or a `VectorStore` instance. See [Vector stores](/raglite/guides/vector-stores/) |
+| `logLevel` | `"info"` | `"silent"`, `"info"` or `"debug"`. Logs go to stderr |
+
+## build()
+
+| Option | Python keyword | Meaning |
+| --- | --- | --- |
+| `rebuild` | `rebuild` | Re-index even if nothing changed |
+| `chunkSize`, `overlap`, `embeddings` | `chunk_size`, `overlap`, `embeddings` | Override the constructor options for this build |
+| `onProgress` | `on_progress` | Called after each batch of 64 chunks with `{ source, embedded, total }` |
+| `signal` | `cancel` | `AbortSignal` (TypeScript) or `threading.Event` (Python) that stops the build |
+
+`Document.build()` returns `{ chunkCount, cached, embeddingProvider, embeddingModel, dimensions }`. `DocumentCollection.build()` returns `{ totalDocuments, totalChunks, cachedDocuments, newDocuments, errors }`.
+
+## search()
+
+| Option | Python keyword | Meaning |
+| --- | --- | --- |
+| `topK` | `top_k` | Number of results |
+| `scoreThreshold` | `score_threshold` | Minimum cosine similarity |
+| `mode` | `mode` | `"vector"`, `"keyword"` or `"hybrid"` |
+| `hybrid` | `hybrid` | `{ rrfK?, candidates?, weights? }` |
+
+## ask() and askStream()
+
+All `search()` options, plus:
+
+| Option | Meaning |
+| --- | --- |
+| `llm` | Overrides the document's LLM for this call |
+| `includeCitations` | Ask the LLM to cite passages as `[n]` (default `true`) |
+| `systemHint` | Extra instructions appended to the system prompt |
+| `signal` | TypeScript only: cancels the LLM request |
+
+## SearchResult
+
+| Field | Meaning |
+| --- | --- |
+| `id` | Chunk id |
+| `text` | The chunk text |
+| `metadata` | `{ source, chunk, totalChunks, page?, pageEnd?, section? }` |
+| `score` | Cosine similarity (vector mode) or fused rank score 0..1 (keyword and hybrid) |
+| `distance` | `1 - score` |
+| `scores` | Keyword and hybrid modes: `{ vector?, keyword?, fused? }` |
+
+## AnswerResult
+
+| Field | Meaning |
+| --- | --- |
+| `text` | The answer |
+| `citations` | `Citation[]`, in order of first citation. See [Citations](/raglite/guides/citations/) |
+| `provider`, `model` | The LLM that answered |
+| `usage` | `{ promptTokens?, completionTokens?, totalTokens? }`, when the provider reports it |
+| `finishReason` | Why the LLM stopped, when reported |
+
+`Citation` is `{ n, source, chunk, page?, pageEnd?, section?, text }`.
+
+## Errors
+
+Every error extends `RagLiteError`.
+
+| Error | Thrown when |
+| --- | --- |
+| `ConfigError` | Invalid options, or a provider package or extra is missing |
+| `FileNotIndexedError` | `search()` or `ask()` on a document that was never built |
+| `UnsupportedFileTypeError` | The file type has no loader |
+| `LoaderError` | A file cannot be read or has no text |
+| `ChunkingError` | Invalid chunk settings, such as `overlap` ≥ `chunkSize` |
+| `EmbeddingError` | The embedding provider failed |
+| `LLMError` | The LLM provider failed |
+| `VectorDBError` | The vector store failed |
+| `BuildCancelledError` | Python only: a build was cancelled. TypeScript throws the signal's `AbortError` |
+
+## Exports
+
+<Tabs syncKey="lang">
+<TabItem label="TypeScript">
+
+```ts
+import {
+  Document,
+  DocumentCollection,
+  createMcpServer,
+  serveMcp,
+  searchTool,
+  extractCitations,
+  createEmbedder,
+  DEFAULT_LLM_MODELS,
+  DEFAULT_EMBEDDING_MODELS,
+} from "raglite-toolkit";
+```
+
+</TabItem>
+<TabItem label="Python">
+
+```python
+from raglite import (
+    Document,
+    DocumentCollection,
+    create_mcp_server,
+    serve_mcp,
+    extract_citations,
+    create_embedder,
+    DEFAULT_LLM_MODELS,
+    DEFAULT_EMBEDDING_MODELS,
+)
+```
+
+</TabItem>
+</Tabs>

@@ -1,0 +1,67 @@
+---
+title: How caching works
+description: When build() reuses an index, when it re-embeds, and what is stored on disk.
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+Embedding costs time and, with hosted models, money. `build()` reuses a saved index whenever it can, so calling it on every start is cheap.
+
+## What triggers a rebuild
+
+`build()` fingerprints the source with a SHA-256 hash of its content (the file bytes, the fetched text of a URL, or the `fromText` text) and saves it with the index. The saved index is reused only if all of these still match:
+
+| Factor | Rebuilds when |
+| --- | --- |
+| Content | The SHA-256 hash differs |
+| `chunkSize` | It changed. When unset, the existing index's value is kept |
+| `overlap` | It changed. When unset, the existing index's value is kept |
+| Embedding provider and model | Either changed. When `embeddings` is unset, the existing index's are kept |
+| Index format | A release changed the stored layout (rare) |
+
+An index built with an embedding model the provider has shut down is also re-embedded; see [Troubleshooting](/raglite/troubleshooting/#an-index-built-with-a-shut-down-embedding-model).
+
+Upgrading RAGLite keeps your indexes: an ordinary release does not change the index format.
+
+## Forcing a rebuild
+
+<Tabs syncKey="lang">
+<TabItem label="TypeScript">
+
+```ts
+await doc.build({ rebuild: true });
+```
+
+</TabItem>
+<TabItem label="Python">
+
+```python
+doc.build(rebuild=True)
+```
+
+</TabItem>
+</Tabs>
+
+From the CLI: `raglite index ./docs --rebuild`.
+
+## Rebuilds are safe
+
+The old index is replaced only after every chunk is embedded. If embedding fails or the build is [cancelled](/raglite/guides/streaming/#cancelling-a-build), the previous index is still there.
+
+## On disk
+
+With the default memory store, each document gets a folder under `storeDir` named after a hash of its absolute path (or its URL, or its `fromText` id):
+
+```text
+.raglite/
+├── 56f0fc5e4aed412d/
+│   ├── chunks.json      # chunk texts, vectors and metadata
+│   ├── metadata.json    # source hash, chunk settings, embedding model, format version
+│   └── keyword.json     # keyword index for hybrid search
+└── 7e67bc35d0cd9147/
+    └── ...
+```
+
+- Moving a file to another path gives it a new folder, so it is indexed again.
+- Deleting a folder (or all of `.raglite`) is always safe; the next `build()` recreates it.
+- With Qdrant, Pinecone or LanceDB, vectors live in the database; `keyword.json` still lives under `storeDir`.

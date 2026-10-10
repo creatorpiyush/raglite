@@ -1,0 +1,78 @@
+---
+title: Agent tools
+description: Turn a document or collection into a search tool for your own agent.
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+Instead of `ask()`, you can let your own agent decide when to search. `asTool()` (TypeScript) and `as_tool()` (Python) turn a document or collection into a search tool. The agent sends a `query`; the tool returns passages with `source`, `chunk`, `page`, `section`, `score` and `text`.
+
+<Tabs syncKey="lang">
+<TabItem label="TypeScript">
+
+`asTool()` returns a [Vercel AI SDK](https://ai-sdk.dev) tool:
+
+```ts
+import { anthropic } from "@ai-sdk/anthropic";
+import { generateText, stepCountIs } from "ai";
+
+const { text } = await generateText({
+  model: anthropic("claude-sonnet-5-5"),
+  tools: {
+    searchPolicies: doc.asTool({ description: "Search the company policies.", topK: 5 }),
+  },
+  stopWhen: stepCountIs(3),
+  prompt: "Can I return an opened item?",
+});
+```
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `description` | A generic description | What the model reads to decide when to call the tool. Name your documents here |
+| `topK` | The document's `topK` | Passages per call |
+| `mode` | The document's retrieval mode | `vector`, `keyword` or `hybrid` |
+
+The tool's name is the key you give it in `tools`.
+
+</TabItem>
+<TabItem label="Python">
+
+`as_tool()` returns a callable with ready-made definitions for OpenAI and Anthropic function calling:
+
+```python
+import anthropic
+
+tool = doc.as_tool(name="search_policies", description="Search the company policies.", top_k=5)
+client = anthropic.Anthropic()
+
+messages = [{"role": "user", "content": "Can I return an opened item?"}]
+response = client.messages.create(
+    model="claude-sonnet-5-5",
+    max_tokens=1024,
+    tools=[tool.anthropic_tool],   # or tool.openai_tool for OpenAI
+    messages=messages,
+)
+
+for block in response.content:
+    if block.type == "tool_use" and block.name == tool.name:
+        result = tool(**block.input)   # JSON string of passages
+        # Send result back as a tool_result block and call the model again.
+```
+
+| Argument | Default | Meaning |
+| --- | --- | --- |
+| `name` | `"search_documents"` | The tool name the model sees |
+| `description` | A generic description | What the model reads to decide when to call the tool. Name your documents here |
+| `top_k` | The document's `topK` | Passages per call |
+| `mode` | The document's retrieval mode | `vector`, `keyword` or `hybrid` |
+
+`tool.parameters` is the JSON Schema of the input, for other frameworks.
+
+</TabItem>
+</Tabs>
+
+## Tool or `ask()`?
+
+- **`ask()`**: one retrieval, one answer. Simple and predictable.
+- **A tool**: the agent can search several times, rephrase, or combine your documents with other tools.
+- **An MCP client** (Claude Code, Cursor): use the [MCP server](/raglite/guides/mcp/) instead; it offers the same search.

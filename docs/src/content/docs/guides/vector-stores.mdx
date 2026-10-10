@@ -1,0 +1,159 @@
+---
+title: Vector stores
+description: Keep vectors on disk, in Qdrant, Pinecone or LanceDB, or in your own store.
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+By default RAGLite keeps vectors in memory and saves them as JSON files under `storeDir`. It needs nothing else to run. For large indexes, or to share an index between machines, set `vectorStore`.
+
+| Store | `provider` | TypeScript | Python | Extra install |
+| --- | --- | --- | --- | --- |
+| Memory (default) | `memory` | ✓ | ✓ | none |
+| Qdrant | `qdrant` | ✓ | ✓ | none |
+| Pinecone | `pinecone` | ✓ | ✓ | none |
+| LanceDB | `lancedb` | ✓ | — | `npm install @lancedb/lancedb` |
+
+## Memory (default)
+
+<Tabs syncKey="lang">
+<TabItem label="TypeScript">
+
+```ts
+new Document("./policy.pdf", { vectorStore: { provider: "memory", storeDir: ".raglite" } });
+```
+
+</TabItem>
+<TabItem label="Python">
+
+```python
+Document("./policy.pdf", {"vectorStore": {"provider": "memory", "storeDir": ".raglite"}})
+```
+
+</TabItem>
+</Tabs>
+
+## Qdrant
+
+Works with a local Qdrant (for example in Docker) or Qdrant Cloud. Each document gets its own collection, `raglite_<namespace>`. Set `indexName` to keep many documents in one shared collection: each point is tagged with its document's namespace, so rebuilding one document never affects the others.
+
+<Tabs syncKey="lang">
+<TabItem label="TypeScript">
+
+```ts
+new Document("./policy.pdf", {
+  vectorStore: {
+    provider: "qdrant",
+    url: "http://localhost:6333", // or your Qdrant Cloud URL
+    apiKey: process.env.QDRANT_API_KEY, // optional
+    indexName: "company_docs", // optional
+  },
+});
+```
+
+</TabItem>
+<TabItem label="Python">
+
+```python
+Document("./policy.pdf", {
+    "vectorStore": {
+        "provider": "qdrant",
+        "url": "http://localhost:6333",  # or your Qdrant Cloud URL
+        "apiKey": os.environ.get("QDRANT_API_KEY"),  # optional
+        "indexName": "company_docs",  # optional
+    },
+})
+```
+
+</TabItem>
+</Tabs>
+
+## Pinecone
+
+Each document is stored in its own Pinecone namespace inside the index. `url` is the index host.
+
+<Tabs syncKey="lang">
+<TabItem label="TypeScript">
+
+```ts
+new Document("./policy.pdf", {
+  vectorStore: {
+    provider: "pinecone",
+    url: "https://your-index-host.svc.pinecone.io",
+    apiKey: process.env.PINECONE_API_KEY,
+  },
+});
+```
+
+</TabItem>
+<TabItem label="Python">
+
+```python
+Document("./policy.pdf", {
+    "vectorStore": {
+        "provider": "pinecone",
+        "url": "https://your-index-host.svc.pinecone.io",
+        "apiKey": os.environ["PINECONE_API_KEY"],
+    },
+})
+```
+
+</TabItem>
+</Tabs>
+
+## LanceDB (TypeScript only)
+
+An embedded database on the local filesystem, in `<storeDir>/lancedb`.
+
+```ts
+new Document("./policy.pdf", { vectorStore: { provider: "lancedb", storeDir: ".raglite" } });
+```
+
+## The keyword index with remote stores
+
+[Hybrid search](/raglite/guides/hybrid-search/) keeps its keyword index under `storeDir`, even with Qdrant or Pinecone. Keep `storeDir` on persistent disk, or the keyword index is lost on restart and keyword search falls back to vector search until you rebuild.
+
+## Collections
+
+With a `DocumentCollection`, pass a provider config as above, never a store instance. See [Collections](/raglite/guides/collections/#vector-stores).
+
+## Your own store
+
+Implement the `VectorStore` interface and pass an instance as `vectorStore`.
+
+<Tabs syncKey="lang">
+<TabItem label="TypeScript">
+
+```ts
+import { Document, type VectorStore } from "raglite-toolkit";
+
+class MyStore implements VectorStore {
+  // Required: namespace, load, reset, add, search, count, saveIndexMetadata, readIndexMetadata
+  // Optional: listChunks() lets hybrid search rebuild a missing keyword index from your store;
+  //           keywordSearch(query, topK) replaces the built-in BM25 index with your own.
+}
+
+new Document("./policy.pdf", { vectorStore: new MyStore() });
+```
+
+</TabItem>
+<TabItem label="Python">
+
+```python
+from raglite import Document, VectorStore
+
+class MyStore(VectorStore):
+    # Required: namespace (property), load, reset, add, search, count,
+    #           save_index_metadata, read_index_metadata
+    # Optional: list_chunks() lets hybrid search rebuild a missing keyword index
+    #           from your store; keyword_search(query, top_k) replaces the
+    #           built-in BM25 index with your own.
+    ...
+
+Document("./policy.pdf", {"vectorStore": MyStore()})
+```
+
+</TabItem>
+</Tabs>
+
+To extend a built-in store, import `MemoryVectorStore`, `QdrantVectorStore`, `PineconeVectorStore` or `LanceDbVectorStore` from `raglite-toolkit`, or the first three from `raglite.vectordb` in Python.

@@ -1,0 +1,98 @@
+---
+title: REST API
+description: Serve search and question answering over HTTP, with optional bearer-token auth.
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+`serve()` starts an HTTP server over a document or collection: [Hono](https://hono.dev) in TypeScript, [FastAPI](https://fastapi.tiangolo.com) in Python. Both have the same endpoints and responses.
+
+<Tabs syncKey="lang">
+<TabItem label="TypeScript">
+
+```ts
+await doc.build();
+
+const handle = await doc.serve({
+  port: 8085,
+  llm: { provider: "openai" },
+  bearerToken: process.env.RAGLITE_TOKEN,
+});
+console.log(handle.url); // http://127.0.0.1:8085
+
+// later
+await handle.close();
+```
+
+Options: `host` (default `127.0.0.1`), `port` (default `8085`), `llm`, `bearerToken`, `requestLogging`. `DocumentCollection.serve()` takes the same options.
+
+</TabItem>
+<TabItem label="Python">
+
+```python
+doc.build()
+
+handle = doc.serve({"llm": {"provider": "openai"}}, port=8085, bearer_token=os.environ["RAGLITE_TOKEN"])
+print(handle.url)  # http://127.0.0.1:8085
+
+# later
+handle.close()
+```
+
+`Document.serve()` runs the server in a background thread and returns. `DocumentCollection.serve()` blocks until stopped:
+
+```python
+collection.serve(host="127.0.0.1", port=8085, bearer_token=os.environ["RAGLITE_TOKEN"], llm={"provider": "openai"})
+```
+
+</TabItem>
+</Tabs>
+
+The `llm` defaults to the document's. Without one, `/ask` returns `503 AskDisabled`.
+
+:::caution
+The server listens on `127.0.0.1` by default. Set a bearer token before binding to `0.0.0.0` or exposing it beyond your machine.
+:::
+
+## Endpoints
+
+| Method | Path | Auth | Body | Returns |
+| --- | --- | --- | --- | --- |
+| `GET` | `/health` | No | — | `{ status, version, chunks, namespace? }` |
+| `GET` | `/info` | Yes | — | Chunk size, overlap, `topK`, retrieval mode, embedding provider and model, LLM provider, chunk count |
+| `POST` | `/search` | Yes | `{ query, topK?, scoreThreshold?, mode? }` | `{ results: SearchResult[] }` |
+| `POST` | `/ask` | Yes | `{ question, topK?, scoreThreshold?, mode?, includeCitations?, stream? }` | An `AnswerResult` with `citations`, or plain text when `stream` is `true` |
+
+- `topK` is 1 to 50. `mode` is `vector`, `keyword` or `hybrid`.
+- With a bearer token set, send `Authorization: Bearer <token>`. A missing or wrong token gets `401`.
+- An invalid body gets `400` with `{ "error": "ValidationError", "details": ... }`.
+
+## Examples
+
+```bash
+curl http://127.0.0.1:8085/health
+
+curl -X POST http://127.0.0.1:8085/search \
+  -H "Authorization: Bearer $RAGLITE_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"query": "refund policy", "topK": 3}'
+
+curl -X POST http://127.0.0.1:8085/ask \
+  -H "Authorization: Bearer $RAGLITE_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"question": "What is the refund policy?"}'
+
+# Streamed answer: plain text, written as it arrives
+curl -N -X POST http://127.0.0.1:8085/ask \
+  -H "Authorization: Bearer $RAGLITE_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"question": "Summarize the document", "stream": true}'
+```
+
+## From the CLI
+
+```bash
+raglite serve ./docs --llm-provider openai --port 8085 --token "$RAGLITE_TOKEN"
+```
+
+See [CLI](/raglite/guides/cli/#serve).
