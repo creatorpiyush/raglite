@@ -10,6 +10,7 @@ import {
   PACKAGE_VERSION,
 } from "../constants.js";
 import { createEmbedder, type Embedder } from "../embeddings/index.js";
+import { DEFAULT_EMBEDDING_MODELS, isRetiredEmbeddingModel } from "../embeddings/models.js";
 import { FileNotIndexedError, LoaderError, RagLiteError } from "../errors.js";
 import {
   type AnswerResult,
@@ -153,12 +154,19 @@ export class Document {
 
     await this.store.load();
     const existing = await this.store.readIndexMetadata();
+    const retired = existing !== null && indexUsesRetiredModel(existing);
     // Likewise an unconfigured embedding provider keeps the existing index's
-    // provider and model rather than switching it to the local default.
-    const embeddingsConfig =
-      options.embeddings ??
-      this.explicitEmbeddings ??
+    // provider and model rather than switching it to the local default,
+    // unless the provider has shut that model down.
+    const requestedEmbeddings = options.embeddings ?? this.explicitEmbeddings;
+    let embeddingsConfig =
+      requestedEmbeddings ??
       (existing ? queryEmbeddingsConfig(existing, this.config.embeddings) : this.config.embeddings);
+    if (retired && !requestedEmbeddings) {
+      // Inherited a shut-down model: fall back to the provider's current default.
+      const { model: _retired, ...rest } = embeddingsConfig;
+      embeddingsConfig = rest;
+    }
     // Chunking nobody asked for keeps the existing index's values, so a
     // plain build() (for example from `raglite search`) does not re-embed an
     // index that was built with a custom chunk size.
@@ -174,10 +182,19 @@ export class Document {
     }
     const sourceHash = text !== null ? hashString(text) : await hashFile(this.filePath);
 
+    // Re-embed an index built with a shut-down model unless that model was asked for explicitly.
+    const keepRetired = retired && requestedEmbeddings?.model === existing?.embeddingModel;
     let reusable =
       !options.rebuild &&
       existing !== null &&
+      (!retired || keepRetired) &&
       cacheKeyMatches(existing, { sourceHash, chunkSize, overlap, embeddingsConfig });
+    if (existing && retired && !keepRetired && !options.rebuild) {
+      this.logger.warn(
+        `Index was built with ${existing.embeddingProvider} "${existing.embeddingModel}", which the provider ` +
+          `has shut down. Re-embedding with "${embeddingsConfig.model ?? DEFAULT_EMBEDDING_MODELS[embeddingsConfig.provider]}".`,
+      );
+    }
     if (reusable && existing && indexFormatVersion(existing) !== INDEX_FORMAT_VERSION) {
       // Format 2 only changed how unspaced scripts are chunked, so a format-1
       // index of a source without such text is still exact: upgrade it in
@@ -467,6 +484,13 @@ export class Document {
         `No RagLite index found for "${this.filePath}". Call build() first.`,
       );
     }
+    if (indexUsesRetiredModel(existing)) {
+      throw new RagLiteError(
+        `The index for "${this.filePath}" was built with ${existing.embeddingProvider} ` +
+          `"${existing.embeddingModel}", which the provider has shut down. ` +
+          "Call build() to re-index it with the current default model.",
+      );
+    }
     this.embedder ??= await createEmbedder(queryEmbeddingsConfig(existing, this.config.embeddings));
     this.ready = true;
   }
@@ -491,6 +515,10 @@ function queryEmbeddingsConfig(
     if (configured.baseURL !== undefined) config.baseURL = configured.baseURL;
   }
   return config;
+}
+
+function indexUsesRetiredModel(metadata: IndexMetadata): boolean {
+  return isRetiredEmbeddingModel(metadata.embeddingProvider, metadata.embeddingModel);
 }
 
 interface CacheCompareInputs {
