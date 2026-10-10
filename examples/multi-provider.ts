@@ -13,17 +13,17 @@ async function main(): Promise<void> {
     { provider: "openai", model: "gpt-4o-mini", apiKey: process.env["OPENAI_API_KEY"] },
     {
       provider: "anthropic",
-      model: "claude-3-5-sonnet-20241022",
+      model: "claude-sonnet-5-5",
       apiKey: process.env["ANTHROPIC_API_KEY"],
     },
     {
       provider: "google",
-      model: "gemini-2.0-flash",
+      model: "gemini-3.8-flash",
       apiKey: process.env["GOOGLE_GENERATIVE_AI_API_KEY"],
     },
     { provider: "mistral", model: "mistral-large-latest", apiKey: process.env["MISTRAL_API_KEY"] },
-    { provider: "cohere", model: "command-r-plus", apiKey: process.env["COHERE_API_KEY"] },
-    { provider: "groq", model: "llama-3.3-70b-versatile", apiKey: process.env["GROQ_API_KEY"] },
+    { provider: "cohere", model: "command-a-03-2025", apiKey: process.env["COHERE_API_KEY"] },
+    { provider: "groq", model: "openai/gpt-oss-120b", apiKey: process.env["GROQ_API_KEY"] },
   ];
 
   for (const llm of providers) {

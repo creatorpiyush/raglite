@@ -219,3 +219,32 @@ describe("Document.ask", () => {
     await expect(doc.ask("anything")).rejects.toThrow(RagLiteError);
   });
 });
+
+describe("Document.fromText", () => {
+  it("indexes inline text, reuses it by id, and re-indexes changed text", async () => {
+    const opts = {
+      storeDir: join(ws.root, ".raglite"),
+      chunkSize: 20,
+      overlap: 5,
+      logLevel: "silent" as const,
+    };
+
+    const doc = Document.fromText("faq-42", SAMPLE, opts);
+    expect((await doc.build()).cached).toBe(false);
+    const hits = await doc.search("refund", { topK: 1 });
+    expect(hits[0]?.metadata.source).toBe("faq-42");
+
+    expect((await Document.fromText("faq-42", SAMPLE, opts).build()).cached).toBe(true);
+    expect((await Document.fromText("faq-42", `${SAMPLE} Updated.`, opts).build()).cached).toBe(
+      false,
+    );
+  });
+
+  it("rejects empty text", async () => {
+    const doc = Document.fromText("empty", "", {
+      storeDir: join(ws.root, ".raglite"),
+      logLevel: "silent",
+    });
+    await expect(doc.build()).rejects.toBeInstanceOf(LoaderError);
+  });
+});

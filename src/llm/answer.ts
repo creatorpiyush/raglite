@@ -32,8 +32,8 @@ export async function generateAnswer(options: GenerateAnswerOptions): Promise<An
       model: llm.languageModel,
       system: buildSystemPrompt(promptOptions),
       prompt: buildUserPrompt(question, context, promptOptions),
-      temperature: llm.temperature,
-      ...(llm.maxTokens !== undefined ? { maxTokens: llm.maxTokens } : {}),
+      ...(llm.temperature !== undefined ? { temperature: llm.temperature } : {}),
+      ...(llm.maxTokens !== undefined ? { maxOutputTokens: llm.maxTokens } : {}),
     });
 
     return {
@@ -59,8 +59,8 @@ export async function* streamAnswer(
       model: llm.languageModel,
       system: buildSystemPrompt(promptOptions),
       prompt: buildUserPrompt(question, context, promptOptions),
-      temperature: llm.temperature,
-      ...(llm.maxTokens !== undefined ? { maxTokens: llm.maxTokens } : {}),
+      ...(llm.temperature !== undefined ? { temperature: llm.temperature } : {}),
+      ...(llm.maxTokens !== undefined ? { maxOutputTokens: llm.maxTokens } : {}),
     });
     for await (const delta of result.textStream) {
       yield delta;

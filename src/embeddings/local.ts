@@ -1,4 +1,4 @@
-import { EmbeddingError } from "../errors.js";
+import { EmbeddingError, missingPackage } from "../errors.js";
 import type { EmbeddingProviderConfig, EmbeddingProviderName } from "../types.js";
 import type { Embedder } from "./base.js";
 import { DEFAULT_EMBEDDING_MODELS } from "./models.js";
@@ -12,7 +12,7 @@ type FeatureExtractionPipeline = (
 
 /**
  * Embedder that runs a small sentence-transformer locally using
- * `@huggingface/transformers`. Optional dependency; installed on demand.
+ * `@huggingface/transformers`. Optional peer dependency; install it to use the "local" provider.
  */
 export class LocalEmbedder implements Embedder {
   readonly provider: EmbeddingProviderName = "local";
@@ -32,16 +32,9 @@ export class LocalEmbedder implements Embedder {
 
   private async ensurePipeline(): Promise<FeatureExtractionPipeline> {
     if (this.pipe) return this.pipe;
-    let transformers: typeof import("@huggingface/transformers");
-    try {
-      transformers = await import("@huggingface/transformers");
-    } catch (cause) {
-      throw new EmbeddingError(
-        "Local embeddings require the '@huggingface/transformers' package. " +
-          "Install it with: npm install @huggingface/transformers",
-        { cause },
-      );
-    }
+    const transformers = await import("@huggingface/transformers").catch(
+      missingPackage("@huggingface/transformers", 'The "local" embedding provider'),
+    );
     this.pipe = (await transformers.pipeline(
       "feature-extraction",
       this.model,

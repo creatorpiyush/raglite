@@ -1,8 +1,8 @@
 import { existsSync } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import * as lancedb from "@lancedb/lancedb";
-import { VectorDBError } from "../errors.js";
+import type * as lancedb from "@lancedb/lancedb";
+import { missingPackage, VectorDBError } from "../errors.js";
 import type {
   ChunkMetadata,
   IndexMetadata,
@@ -35,9 +35,12 @@ export class LanceDbVectorStore implements VectorStore {
 
   private async ensureDb(): Promise<lancedb.Connection> {
     if (this.db) return this.db;
+    const { connect } = await import("@lancedb/lancedb").catch(
+      missingPackage("@lancedb/lancedb", 'The "lancedb" vector store'),
+    );
     try {
       await mkdir(this.dbPath, { recursive: true });
-      this.db = await lancedb.connect(this.dbPath);
+      this.db = await connect(this.dbPath);
       return this.db;
     } catch (cause) {
       throw new VectorDBError(`Failed to connect to LanceDB at ${this.dbPath}`, { cause });

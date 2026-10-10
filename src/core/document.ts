@@ -106,17 +106,32 @@ export class Document {
   private readonly chunking: { chunkSize?: number; overlap?: number };
   /** Embeddings the caller set in the constructor; if unset, an existing index keeps its own. */
   private readonly explicitEmbeddings?: EmbeddingProviderConfig;
+  /** Set by fromText(): indexed instead of reading `filePath`. */
+  private readonly inlineText?: string;
 
   private embedder: Embedder | null = null;
   private ready = false;
   private keywordIndex: KeywordIndex | null = null;
   private keywordUnavailableWarned = false;
 
-  constructor(filePath: string, options: DocumentOptions = {}) {
-    this.filePath = isUrl(filePath) ? filePath : resolve(filePath);
+  /**
+   * Index text you already have (a DB row, an upload, CMS content) without a
+   * file. `id` names the index: reuse the same id to reuse it, and changed
+   * text is re-indexed on the next build(). `id` is also the chunks' `source`.
+   */
+  static fromText(id: string, text: string, options: DocumentOptions = {}): Document {
+    return new Document(id, options, text);
+  }
+
+  /** `inlineText` is internal; use Document.fromText(). */
+  constructor(filePath: string, options: DocumentOptions = {}, inlineText?: string) {
+    this.inlineText = inlineText;
+    this.filePath = inlineText !== undefined || isUrl(filePath) ? filePath : resolve(filePath);
     this.config = resolveConfig(options);
     this.logger = createLogger(this.config.logLevel);
-    this.namespace = namespaceFromPath(this.filePath);
+    this.namespace = namespaceFromPath(
+      inlineText !== undefined ? `text:${filePath}` : this.filePath,
+    );
 
     if (typeof this.config.vectorStore === "object" && "provider" in this.config.vectorStore) {
       this.store = createVectorStore(this.config.vectorStore, this.namespace);
@@ -132,7 +147,7 @@ export class Document {
    * Build (or reuse) the semantic index for this document.
    */
   async build(options: IndexOptions = {}): Promise<IndexBuildResult> {
-    if (!isUrl(this.filePath) && !existsSync(this.filePath)) {
+    if (this.inlineText === undefined && !isUrl(this.filePath) && !existsSync(this.filePath)) {
       throw new LoaderError(`File does not exist: ${this.filePath}`);
     }
 
@@ -153,8 +168,8 @@ export class Document {
       options.overlap ?? this.chunking.overlap ?? existing?.overlap ?? this.config.overlap;
     // Web pages change without their URL changing, so fingerprint the
     // fetched content rather than the URL.
-    let text: string | null = null;
-    if (isUrl(this.filePath)) {
+    let text: string | null = this.inlineText ?? null;
+    if (text === null && isUrl(this.filePath)) {
       text = await getLoader(this.filePath).load();
     }
     const sourceHash = text !== null ? hashString(text) : await hashFile(this.filePath);
@@ -212,7 +227,10 @@ export class Document {
       );
     }
 
-    const source = isUrl(this.filePath) ? this.filePath : basename(this.filePath);
+    const source =
+      this.inlineText !== undefined || isUrl(this.filePath)
+        ? this.filePath
+        : basename(this.filePath);
     const stored: StoredChunk[] = chunks.map((text, index) => {
       const metadata: ChunkMetadata = {
         source,
