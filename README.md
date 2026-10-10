@@ -346,6 +346,7 @@ npm run format       # biome format --write
 npm test             # vitest run
 npm run verify       # typecheck + lint + tests (runs on prepublishOnly)
 npm run build        # emit dist/
+npm run smoke:providers  # live call per provider whose API key is set (see the script)
 ```
 
 ## License

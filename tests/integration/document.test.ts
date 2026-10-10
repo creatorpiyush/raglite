@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MockEmbedder } from "../helpers/mock-embedder.js";
@@ -246,5 +246,52 @@ describe("Document.fromText", () => {
       logLevel: "silent",
     });
     await expect(doc.build()).rejects.toBeInstanceOf(LoaderError);
+  });
+});
+
+describe("indexes built with a shut-down embedding model", () => {
+  async function retiredIndex() {
+    const p = ws.file("policy.txt", SAMPLE);
+    const opts = {
+      storeDir: join(ws.root, ".raglite"),
+      chunkSize: 20,
+      overlap: 5,
+      logLevel: "silent" as const,
+    };
+    const doc = new Document(p, opts);
+    await doc.build();
+    // Pretend it was built with Google's text-embedding-004, which Google has shut down.
+    const metaPath = join(ws.root, ".raglite", doc.storeNamespace, "metadata.json");
+    const meta = JSON.parse(await readFile(metaPath, "utf8"));
+    await writeFile(
+      metaPath,
+      JSON.stringify({
+        ...meta,
+        embeddingProvider: "google",
+        embeddingModel: "text-embedding-004",
+      }),
+    );
+    mockEmbedder.embedDocumentsCalls = 0;
+    return { p, opts };
+  }
+
+  it("search() without build() explains how to fix it", async () => {
+    const { p, opts } = await retiredIndex();
+    await expect(new Document(p, opts).search("refund")).rejects.toThrow(
+      /shut down.*Call build\(\)/,
+    );
+  });
+
+  it("build() re-embeds with the current default model", async () => {
+    const { p, opts } = await retiredIndex();
+    expect((await new Document(p, opts).build()).cached).toBe(false);
+    expect(mockEmbedder.embedDocumentsCalls).toBe(1);
+  });
+
+  it("build() keeps the index when that model is requested explicitly", async () => {
+    const { p, opts } = await retiredIndex();
+    const embeddings = { provider: "google" as const, model: "text-embedding-004" };
+    expect((await new Document(p, { ...opts, embeddings }).build()).cached).toBe(true);
+    expect(mockEmbedder.embedDocumentsCalls).toBe(0);
   });
 });

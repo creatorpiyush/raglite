@@ -1,6 +1,6 @@
 {
   "name": "raglite-toolkit",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Build semantic search, multi-provider question answering, and REST APIs over your documents in a few lines of TypeScript.",
   "type": "module",
   "main": "./dist/index.js",
@@ -34,6 +34,7 @@
     "format": "biome format --write .",
     "check": "biome check --write .",
     "verify": "npm run typecheck && npm run lint && npm run test",
+    "smoke:providers": "tsx scripts/smoke-providers.ts",
     "example:basic": "tsx examples/basic.ts",
     "example:serve": "tsx examples/serve.ts",
     "example:multi": "tsx examples/multi-provider.ts",

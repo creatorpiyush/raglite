@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.1] - 2026-10-10
+
+### Fixed
+- **Indexes built with a shut-down embedding model:** `build()` now re-embeds an index built with a model the provider has shut down (Google `text-embedding-004` and `embedding-001`) using the provider's current default, and logs a warning. Previously it reused the index, and every search then failed at the provider. Searching such an index without `build()` throws an error that says to call `build()`. Passing the old model explicitly in `embeddings` still keeps the index.
+- **Reported version:** `raglite --version`, `/health`, `/info`, index metadata and the web loader's User-Agent reported 1.3.0 in 2.0.0. They now report the package version, and a test keeps the two in sync.
+
+### Added
+- **Provider smoke test:** `npm run smoke:providers` makes one embedding call and one answer per provider with the default models, for every provider whose API key is set (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`, `MISTRAL_API_KEY`, `COHERE_API_KEY`, `GROQ_API_KEY`, `XAI_API_KEY`, `VOYAGE_API_KEY`, `OLLAMA_BASE_URL`), and exits 1 if any fails. The "Provider Smoke Test" GitHub workflow runs it on demand with repository secrets.
+
+### Internal
+- `scripts/` is now type-checked.
+
 ## [2.0.0] - 2026-10-10
 
 ### Breaking changes
