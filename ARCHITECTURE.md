@@ -13,6 +13,7 @@ This document details the software architecture, component design, data flow, an
 * **Pluggable & Extensible**: Interfaces for Document Loaders, Splitters, Embeddings, Vector Stores, and LLMs.
 * **Per-Document Isolation**: Namespaced vector collections tied to source document path/identity.
 * **SHA-256 Content Caching**: Automatically skips re-embedding if document content has not changed.
+* **Small Core, Optional Providers**: Provider SDKs (`@ai-sdk/*`, `ollama-ai-provider-v2`, `voyage-ai-provider`), `@lancedb/lancedb` and `@huggingface/transformers` are optional peer dependencies. They are loaded with dynamic `import()` on first use; a missing one becomes a `ConfigError` naming the `npm install` command (`missingPackage()` in `errors.ts`).
 * **Offline-First Option**: Local offline embeddings via `@huggingface/transformers` (`Xenova/all-MiniLM-L6-v2`) and local LLMs via Ollama.
 
 ---
@@ -35,7 +36,7 @@ raglite/src/
 │   ├── base.ts
 │   ├── factory.ts
 │   ├── index.ts
-│   ├── local.ts      # @huggingface/transformers (ONNX)
+│   ├── local.ts      # @huggingface/transformers (ONNX, optional peer)
 │   ├── models.ts
 │   └── remote.ts     # OpenAI, Gemini, Mistral, Cohere, Voyage, Ollama
 ├── llm/             # LLM provider factory & prompt synthesis
@@ -58,14 +59,14 @@ raglite/src/
 ├── vectordb/        # Vector Database adapters
 │   ├── base.ts       # VectorStore interface
 │   ├── factory.ts
-│   ├── lancedb.ts    # Embedded LanceDB
+│   ├── lancedb.ts    # Embedded LanceDB (optional peer, loaded on first use)
 │   ├── memory.ts     # Local JSON persistence (.raglite/)
 │   ├── pinecone.ts   # Pinecone Cloud
 │   └── qdrant.ts     # Qdrant local/cloud
 ├── cli.ts           # Command-line interface tool
 ├── config.ts        # Environment & default configuration
 ├── constants.ts     # System constants & defaults
-├── errors.ts        # Custom RAGLite error definitions
+├── errors.ts        # Custom RAGLite error definitions + missingPackage()
 ├── index.ts         # Module entrypoint & public exports
 ├── types.ts         # TypeScript interfaces & types
 └── utils/           # Utility functions (hashing, math, crypto)
@@ -123,7 +124,7 @@ graph TD
 ## 4. End-to-End Data Pipeline
 
 ### 4.1 Ingestion & Indexing
-1. `doc.build()` invokes the appropriate `DocumentLoader` based on file extension (`.pdf`, `.txt`, `.json`, `.md`, `.docx`).
+1. `doc.build()` invokes the appropriate `DocumentLoader` based on file extension (`.pdf`, `.txt`, `.json`, `.md`, `.docx`). A document made with `Document.fromText(id, text)` skips the loader and uses the given text; its namespace is derived from `text:<id>`, and `id` is the chunks' `source`.
 2. Calculates SHA-256 hash of raw document content.
 3. Checks existing `IndexMetadata` in `VectorStore`. The cached index is reused when the index format version, content hash, chunk size, overlap and embedding provider/model all match (URL sources are hashed by their fetched text).
 4. If hash differs or force rebuild requested:

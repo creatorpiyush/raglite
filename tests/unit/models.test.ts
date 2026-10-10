@@ -36,3 +36,23 @@ describe("DEFAULT_EMBEDDING_MODELS", () => {
     }
   });
 });
+
+// Model IDs the providers have shut down; a default must never be one of these.
+const RETIRED = [
+  "claude-3-5-sonnet-20241022",
+  "gemini-2.0-flash",
+  "text-embedding-004",
+  "command-r-plus",
+  "llama-3.3-70b-versatile",
+  "grok-2-latest",
+];
+
+describe("default models", () => {
+  it("uses no retired model IDs", () => {
+    const defaults = [
+      ...Object.values(DEFAULT_LLM_MODELS),
+      ...Object.values(DEFAULT_EMBEDDING_MODELS),
+    ];
+    for (const id of RETIRED) expect(defaults).not.toContain(id);
+  });
+});

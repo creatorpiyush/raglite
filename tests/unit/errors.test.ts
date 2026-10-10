@@ -6,6 +6,7 @@ import {
   FileNotIndexedError,
   LLMError,
   LoaderError,
+  missingPackage,
   RagLiteError,
   UnsupportedFileTypeError,
   VectorDBError,
@@ -42,5 +43,21 @@ describe("error hierarchy", () => {
     const cause = new Error("root");
     const err = new LoaderError("failed", { cause });
     expect((err as Error & { cause?: unknown }).cause).toBe(cause);
+  });
+});
+
+describe("missingPackage", () => {
+  it("turns a missing module into a ConfigError with the install command", async () => {
+    // @ts-expect-error the package does not exist
+    const p = import("raglite-no-such-package").catch(
+      missingPackage("raglite-no-such-package", "Thing"),
+    );
+    await expect(p).rejects.toThrow(ConfigError);
+    await expect(p).rejects.toThrow("npm install raglite-no-such-package");
+  });
+
+  it("rethrows other errors unchanged", () => {
+    const err = new Error("boom");
+    expect(() => missingPackage("x", "Thing")(err)).toThrow(err);
   });
 });

@@ -15,15 +15,21 @@ Build semantic search, multi-provider question answering, and REST APIs over you
 
 ## Install
 
+Requires Node.js 20 or later.
+
 ```bash
 npm install raglite-toolkit
 ```
 
-Provider SDKs are pulled in on demand. For local (offline) embeddings:
+The core install is small. Install the SDK for each provider you use; the [Supported providers](#supported-providers) tables list the package for each one. For example:
 
 ```bash
-npm install @huggingface/transformers
+npm install @ai-sdk/openai @ai-sdk/anthropic   # OpenAI embeddings + Claude answers
+npm install @huggingface/transformers          # local (offline) embeddings, the default
+npm install @lancedb/lancedb                   # LanceDB vector store
 ```
+
+If a package is missing, RAGLite throws a `ConfigError` that names the `npm install` command to run.
 
 ## Quick start
 
@@ -41,6 +47,15 @@ const hits = await doc.search("refund policy", { topK: 3 });
 
 const answer = await doc.ask("What is the refund policy?");
 console.log(answer.text);
+```
+
+## Index text you already have
+
+No file needed: index a database row, an upload or CMS content with `Document.fromText(id, text)`. The `id` names the index (reuse it to reuse the index) and becomes each chunk's `source`. Changed text is re-indexed on the next `build()`.
+
+```ts
+const doc = Document.fromText("faq-42", faqText, { embeddings: { provider: "openai" } });
+await doc.build();
 ```
 
 ## Multi-Document & Directory Ingestion (`DocumentCollection`)
@@ -108,15 +123,15 @@ const openai = await doc.ask("Summarize this document", {
 });
 
 const claude = await doc.ask("Summarize this document", {
-  llm: { provider: "anthropic", model: "claude-3-5-sonnet-20241022", apiKey: process.env.ANTHROPIC_API_KEY },
+  llm: { provider: "anthropic", model: "claude-sonnet-5-5", apiKey: process.env.ANTHROPIC_API_KEY },
 });
 
 const gemini = await doc.ask("Summarize this document", {
-  llm: { provider: "google", model: "gemini-2.0-flash", apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY },
+  llm: { provider: "google", model: "gemini-3.8-flash", apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY },
 });
 
 const groq = await doc.ask("Summarize this document", {
-  llm: { provider: "groq", model: "llama-3.3-70b-versatile", apiKey: process.env.GROQ_API_KEY },
+  llm: { provider: "groq", model: "openai/gpt-oss-120b", apiKey: process.env.GROQ_API_KEY },
 });
 
 const local = await doc.ask("Summarize this document", {
@@ -125,6 +140,8 @@ const local = await doc.ask("Summarize this document", {
 ```
 
 ## Fully local with Ollama
+
+Install the provider first: `npm install ollama-ai-provider-v2`.
 
 ```ts
 const doc = new Document("./policy.pdf", {
@@ -182,7 +199,7 @@ const doc = new Document("./policy.pdf", {
 ```
 
 ### LanceDB (Local)
-Runs a high-performance local database on the filesystem.
+Runs a high-performance local database on the filesystem. Install it first: `npm install @lancedb/lancedb`.
 ```ts
 const doc = new Document("./policy.pdf", {
   vectorStore: {
@@ -276,28 +293,32 @@ raglite serve https://example.com \
 
 **LLMs**
 
-| Provider   | Config key   | Default model |
-| ---------- | ------------ | ------------- |
-| OpenAI     | `openai`     | `gpt-4o-mini` |
-| Anthropic  | `anthropic`  | `claude-3-5-sonnet-20241022` |
-| Google     | `google`     | `gemini-2.0-flash` |
-| Mistral    | `mistral`    | `mistral-large-latest` |
-| Cohere     | `cohere`     | `command-r-plus` |
-| Groq       | `groq`       | `llama-3.3-70b-versatile` |
-| xAI (Grok) | `xai`        | `grok-2-latest` |
-| Ollama     | `ollama`     | `llama3.2` |
+| Provider   | Config key   | Default model | Package to install |
+| ---------- | ------------ | ------------- | ------------------ |
+| OpenAI     | `openai`     | `gpt-4o-mini` | `@ai-sdk/openai` |
+| Anthropic  | `anthropic`  | `claude-sonnet-5-5` | `@ai-sdk/anthropic` |
+| Google     | `google`     | `gemini-3.8-flash` | `@ai-sdk/google` |
+| Mistral    | `mistral`    | `mistral-large-latest` | `@ai-sdk/mistral` |
+| Cohere     | `cohere`     | `command-a-03-2025` | `@ai-sdk/cohere` |
+| Groq       | `groq`       | `openai/gpt-oss-120b` | `@ai-sdk/groq` |
+| xAI (Grok) | `xai`        | `grok-4.7` | `@ai-sdk/xai` |
+| Ollama     | `ollama`     | `llama3.2` | `ollama-ai-provider-v2` |
 
 **Embeddings**
 
-| Provider | Config key | Default model |
-| -------- | ---------- | ------------- |
-| OpenAI   | `openai`   | `text-embedding-3-small` |
-| Google   | `google`   | `text-embedding-004` |
-| Mistral  | `mistral`  | `mistral-embed` |
-| Cohere   | `cohere`   | `embed-english-v3.0` |
-| Voyage   | `voyage`   | `voyage-3` |
-| Ollama   | `ollama`   | `nomic-embed-text` |
-| Local    | `local`    | `Xenova/all-MiniLM-L6-v2` |
+| Provider | Config key | Default model | Package to install |
+| -------- | ---------- | ------------- | ------------------ |
+| OpenAI   | `openai`   | `text-embedding-3-small` | `@ai-sdk/openai` |
+| Google   | `google`   | `gemini-embedding-2` | `@ai-sdk/google` |
+| Mistral  | `mistral`  | `mistral-embed` | `@ai-sdk/mistral` |
+| Cohere   | `cohere`   | `embed-english-v3.0` | `@ai-sdk/cohere` |
+| Voyage   | `voyage`   | `voyage-3` | `voyage-ai-provider` |
+| Ollama   | `ollama`   | `nomic-embed-text` | `ollama-ai-provider-v2` |
+| Local    | `local`    | `Xenova/all-MiniLM-L6-v2` | `@huggingface/transformers` |
+
+Anthropic requests send no `temperature` unless you set one, because Claude 5 models reject non-default sampling values.
+
+Qdrant and Pinecone need no extra package. LanceDB needs `@lancedb/lancedb`.
 
 ## Configuration
 

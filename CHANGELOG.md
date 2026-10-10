@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.0] - 2026-10-10
+
+### Breaking changes
+- **Provider SDKs are now optional peer dependencies.** `npm install raglite-toolkit` no longer installs every provider SDK, LanceDB and `@huggingface/transformers`. A fresh install drops from about 617 MB to 38 MB. Install the package for each provider you use (listed in the README's provider tables). When one is missing, RAGLite throws a `ConfigError` naming the `npm install` command to run. This covers `@ai-sdk/*`, `ollama-ai-provider-v2`, `voyage-ai-provider`, `@lancedb/lancedb` and `@huggingface/transformers`.
+- **The default `local` embedding provider needs `npm install @huggingface/transformers`.** Previously it came in as an optional dependency. A missing package now throws `ConfigError` rather than `EmbeddingError`.
+- **Node.js 20 or later is required.** Node 18 is end-of-life.
+- **Default models changed** where the provider has shut the old one down: Anthropic `claude-3-5-sonnet-20241022` → `claude-sonnet-5-5`, Google `gemini-2.0-flash` → `gemini-3.8-flash`, Cohere `command-r-plus` → `command-a-03-2025`, Groq `llama-3.3-70b-versatile` → `openai/gpt-oss-120b`, xAI `grok-2-latest` → `grok-4.7`, and Google embeddings `text-embedding-004` → `gemini-embedding-2`. Pass `model` to keep a different one.
+
+### Added
+- **`Document.fromText(id, text, options)`** indexes text you already have, such as a database row, an upload or CMS content, with no file. The `id` names the index and is each chunk's `source`; changed text is re-indexed on the next `build()`.
+
+### Fixed
+- **`maxTokens` was ignored:** the LLM `maxTokens` option was passed to the AI SDK under a name it no longer reads, so answers were never capped. It is now sent as `maxOutputTokens`.
+- **Anthropic gets no `temperature` unless you set one.** Claude 5 models reject non-default sampling values, so the previous default of 0 would fail with the new default model.
+
+### Internal
+- CI runs on Node.js 20, 22 and 24.
+- The LanceDB store loads `@lancedb/lancedb` on first use rather than at import time.
+
+### Upgrade notes
+- Install the SDKs you use, for example `npm install @ai-sdk/openai @huggingface/transformers`.
+- Existing indexes are kept. An index built with Google embeddings and the old default model keeps using `text-embedding-004` for queries, which Google has shut down. Rebuild it with `build({ rebuild: true })` to move to `gemini-embedding-2`.
+
 ## [1.3.0] - 2026-10-03
 
 ### Added

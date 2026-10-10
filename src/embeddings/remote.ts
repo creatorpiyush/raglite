@@ -1,5 +1,5 @@
 import { type EmbeddingModel, embed, embedMany } from "ai";
-import { EmbeddingError } from "../errors.js";
+import { EmbeddingError, missingPackage } from "../errors.js";
 import type { EmbeddingProviderConfig, EmbeddingProviderName } from "../types.js";
 import type { Embedder } from "./base.js";
 import { DEFAULT_EMBEDDING_MODELS } from "./models.js";
@@ -80,32 +80,44 @@ async function buildEmbeddingModel(
 
   switch (provider) {
     case "openai": {
-      const { createOpenAI } = await import("@ai-sdk/openai");
+      const { createOpenAI } = await import("@ai-sdk/openai").catch(
+        missingPackage("@ai-sdk/openai", `The "${provider}" embedding provider`),
+      );
       const client = createOpenAI(opts);
       return client.embedding(model);
     }
     case "google": {
-      const { createGoogleGenerativeAI } = await import("@ai-sdk/google");
+      const { createGoogleGenerativeAI } = await import("@ai-sdk/google").catch(
+        missingPackage("@ai-sdk/google", `The "${provider}" embedding provider`),
+      );
       const client = createGoogleGenerativeAI(opts);
       return client.textEmbeddingModel(model);
     }
     case "mistral": {
-      const { createMistral } = await import("@ai-sdk/mistral");
+      const { createMistral } = await import("@ai-sdk/mistral").catch(
+        missingPackage("@ai-sdk/mistral", `The "${provider}" embedding provider`),
+      );
       const client = createMistral(opts);
       return client.textEmbeddingModel(model);
     }
     case "cohere": {
-      const { createCohere } = await import("@ai-sdk/cohere");
+      const { createCohere } = await import("@ai-sdk/cohere").catch(
+        missingPackage("@ai-sdk/cohere", `The "${provider}" embedding provider`),
+      );
       const client = createCohere(opts);
       return client.textEmbeddingModel(model);
     }
     case "voyage": {
-      const { createVoyage } = await import("voyage-ai-provider");
+      const { createVoyage } = await import("voyage-ai-provider").catch(
+        missingPackage("voyage-ai-provider", `The "${provider}" embedding provider`),
+      );
       const client = createVoyage(opts);
       return client.textEmbeddingModel(model);
     }
     case "ollama": {
-      const { createOllama } = await import("ollama-ai-provider-v2");
+      const { createOllama } = await import("ollama-ai-provider-v2").catch(
+        missingPackage("ollama-ai-provider-v2", `The "${provider}" embedding provider`),
+      );
       const client = createOllama(config.baseURL ? { baseURL: config.baseURL } : {});
       return client.textEmbeddingModel(model);
     }
