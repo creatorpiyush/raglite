@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.1.0] - 2026-10-10
+
+### Added
+- **Citations:** `ask()` now returns `citations`, the passages the answer cites as `[n]`, in order of first citation, each with `n`, `source`, `chunk`, `page`, `pageEnd`, `section` and `text`. `[2]`, `[1][3]` and `[1, 3]` are recognised. The REST `/ask` response includes them, and `raglite ask` lists the sources under the answer.
+- **Page numbers and sections:** chunks of PDFs record `page` (and `pageEnd` when they cross a page break), and chunks of Markdown files record `section`, the heading path such as `Policies > Refunds`. Chunk boundaries are unchanged, so existing indexes are not re-embedded; they get these fields after `build({ rebuild: true })`. The prompt now labels each passage with its page and section.
+- **MCP server:** `raglite mcp <path>` serves a document or folder to MCP clients (Claude Code, Claude Desktop, Cursor, VS Code) over stdio, with the tools `search`, `list_sources`, and `ask` when an LLM is configured. Tool names and inputs are the same in both SDKs. Needs `npm install @modelcontextprotocol/sdk` (optional peer dependency). From code: `serveMcp()` and `createMcpServer()`.
+- **`asTool()`** on `Document` and `DocumentCollection` returns a Vercel AI SDK tool that searches the documents, for `generateText({ tools })` and agents. Also exported as `searchTool()`.
+- **Build progress and cancellation:** `build({ onProgress, signal })` embeds in batches of 64, reports `{ source, embedded, total }` after each, and stops between batches when the `AbortSignal` fires. `ask()` and `askStream()` accept `signal` to cancel the LLM request. Aborts throw the standard `AbortError`.
+- **`--store-dir`** on every CLI command sets where indexes are kept (default `./.raglite`). MCP clients may start servers in any directory, so the MCP setup in the README passes it.
+- `CONTRIBUTING.md`, `SECURITY.md`, issue forms and a pull request template.
+
+### Changed
+- **A failed or cancelled `build()` keeps the previous index.** The old index is now replaced only after every chunk is embedded. Previously it was cleared before embedding, so an embedding error left the document with no index.
+- **Logs go to stderr.** `info` and `debug` messages used `console.log`; they now use `console.error`, like warnings and errors and like the Python SDK. stdout carries only your program's output, which the MCP stdio transport requires.
+- `Embedder.embedDocuments()` takes an optional second argument `{ signal }`. Custom embedders need no change.
+
 ## [2.0.1] - 2026-10-10
 
 ### Fixed

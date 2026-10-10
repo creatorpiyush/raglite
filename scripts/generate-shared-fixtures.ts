@@ -13,6 +13,8 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { RecursiveChunker } from "../src/chunking/index.js";
+import { chunkLocation, markdownHeadings, pageStarts } from "../src/chunking/locations.js";
+import { extractCitations } from "../src/llm/prompt.js";
 import { reciprocalRankFusion } from "../src/retrieval/fusion.js";
 import { KeywordIndex } from "../src/retrieval/keyword-index.js";
 import { tokenize } from "../src/text/tokenizer.js";
@@ -159,6 +161,76 @@ const rrf = rrfInputs.map((input) => ({
   ).map(({ id, score, scores }) => ({ id, score, scores })),
 }));
 
+// Page and section of each chunk, and which passages an answer cites.
+const locationInputs: {
+  name: string;
+  pages?: string[];
+  markdown?: string;
+  chunkSize: number;
+  overlap: number;
+}[] = [
+  { name: "one page", pages: ["Refunds within 30 days."], chunkSize: 500, overlap: 50 },
+  {
+    name: "chunks across pages",
+    pages: ["w1 w2 w3", "w4 w5", "", "w6 w7 w8 w9"],
+    chunkSize: 4,
+    overlap: 1,
+  },
+  { name: "unspaced page text", pages: ["返金は三十日", "以内 ok"], chunkSize: 4, overlap: 0 },
+  {
+    name: "markdown heading path",
+    markdown:
+      "Intro text here.\n# Policies\nGeneral words.\n## Refunds\nRefunds take thirty days.\n## Shipping ##\nShips fast.\n# Contact\nEmail us.",
+    chunkSize: 4,
+    overlap: 1,
+  },
+  {
+    name: "markdown ignores headings in code fences",
+    markdown: "# Real\nalpha beta\n```\n# not a heading\n```\n~~~\n## also not\n~~~\ngamma delta",
+    chunkSize: 3,
+    overlap: 0,
+  },
+  {
+    name: "markdown with Windows line endings",
+    markdown: "# One\r\nalpha beta\r\n## Two\r\ngamma delta",
+    chunkSize: 2,
+    overlap: 0,
+  },
+  {
+    name: "markdown heading levels and spacing",
+    markdown: "    # indented code\n   ### Deep #\none two\n#NoSpace\n## Two\nthree four",
+    chunkSize: 2,
+    overlap: 0,
+  },
+];
+const locations = locationInputs.map((input) => {
+  const text = input.pages ? input.pages.join("\n") : input.markdown!;
+  const layout = input.pages
+    ? { pageStarts: pageStarts(input.pages) }
+    : { headings: markdownHeadings(text) };
+  const spans = new RecursiveChunker(input.chunkSize, input.overlap).spans(text);
+  return { ...input, chunks: spans.map((span) => ({ ...span, ...chunkLocation(layout, span) })) };
+});
+
+const citationContext = [1, 2, 3].map((n) => ({
+  id: `c${n}`,
+  text: `passage ${n}`,
+  metadata: { source: "doc.pdf", chunk: n, totalChunks: 3, page: n },
+  score: 1,
+  distance: 0,
+}));
+const citations = [
+  "No citations here.",
+  "Thirty days [2].",
+  "See [3][1] and again [3].",
+  "Both [1, 2] apply; [1,3] too.",
+  "Out of range [0] [4] [12] are ignored; [2] is not.",
+  "Not citations: [a] [1.5] [ 2 ] [\u0663].",
+].map((answer) => ({
+  answer,
+  cited: extractCitations(answer, citationContext).map((c) => c.n),
+}));
+
 const hashInputs = ["", "hello", "Refunds 30 días — 返金 🚀", "line1\r\nline2"];
 const hash = {
   hashString: hashInputs.map((input) => ({ input, sha256: hashString(input) })),
@@ -173,4 +245,9 @@ writeFileSync(join(outDir, "hash.json"), `${JSON.stringify(hash, null, 2)}\n`, "
 writeFileSync(join(outDir, "tokenizer.json"), `${JSON.stringify(tokenizer, null, 2)}\n`, "utf-8");
 writeFileSync(join(outDir, "bm25.json"), `${JSON.stringify(bm25, null, 2)}\n`, "utf-8");
 writeFileSync(join(outDir, "rrf.json"), `${JSON.stringify(rrf, null, 2)}\n`, "utf-8");
+writeFileSync(
+  join(outDir, "locations.json"),
+  `${JSON.stringify({ chunks: locations, citations }, null, 2)}\n`,
+  "utf-8",
+);
 console.log(`Wrote shared fixtures to ${outDir}`);

@@ -34,16 +34,21 @@ export class RemoteEmbedder implements Embedder {
     return new RemoteEmbedder(config.provider, model, embeddingModel);
   }
 
-  async embedDocuments(texts: string[]): Promise<number[][]> {
+  async embedDocuments(
+    texts: string[],
+    options: { signal?: AbortSignal } = {},
+  ): Promise<number[][]> {
     if (texts.length === 0) return [];
     try {
       const { embeddings } = await embedMany({
         model: this.embeddingModel,
         values: texts,
+        ...(options.signal ? { abortSignal: options.signal } : {}),
       });
       this.rememberDimensions(embeddings[0]);
       return embeddings.map((v) => normalize(v));
     } catch (cause) {
+      options.signal?.throwIfAborted();
       throw new EmbeddingError(`Failed to embed ${texts.length} document(s) via ${this.provider}`, {
         cause,
       });

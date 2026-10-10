@@ -78,6 +78,10 @@ describe("Document.ask (with stubbed LLM)", () => {
     const doc = await makeReadyDoc({ provider: "openai", apiKey: "sk-test" });
     const result = await doc.ask("How long is the refund window?");
     expect(result.text).toBe("Stubbed answer citing [1].");
+    // The stub cites [1]: the first retrieved passage.
+    expect(result.citations).toHaveLength(1);
+    expect(result.citations[0]).toMatchObject({ n: 1, source: "kb.txt" });
+    expect(result.citations[0]!.text.length).toBeGreaterThan(0);
     expect(result.provider).toBe("openai");
     expect(result.usage?.totalTokens).toBe(15);
   });

@@ -2,6 +2,13 @@ import { ChunkingError } from "../errors.js";
 import { hasUnspacedText, isMark, isUnspacedChar } from "../text/scripts.js";
 import { BaseChunker } from "./base.js";
 
+/** A chunk and the units it covers, [start, end). */
+export interface Span {
+  text: string;
+  start: number;
+  end: number;
+}
+
 /** One chunking unit: a word, or a single character of an unspaced script. */
 interface Unit {
   text: string;
@@ -22,6 +29,11 @@ interface Unit {
  */
 export class RecursiveChunker extends BaseChunker {
   override split(text: string): string[] {
+    return this.spans(text).map((span) => span.text);
+  }
+
+  /** Like split(), with each chunk's unit range, for locating it in the source. */
+  spans(text: string): Span[] {
     if (!text.trim()) return [];
     if (this.overlap >= this.chunkSize) {
       throw new ChunkingError(
@@ -34,22 +46,34 @@ export class RecursiveChunker extends BaseChunker {
       ? words.flatMap(wordUnits)
       : words.map((w) => ({ text: w, spaced: true }));
     if (units.length <= this.chunkSize) {
-      return [render(units)];
+      return [{ text: render(units), start: 0, end: units.length }];
     }
 
     const step = this.chunkSize - this.overlap;
-    const chunks: string[] = [];
+    const chunks: Span[] = [];
 
     for (let start = 0; start < units.length; start += step) {
       const end = start + this.chunkSize;
       const slice = units.slice(start, end);
       if (slice.length === 0) continue;
-      chunks.push(render(slice));
+      chunks.push({ text: render(slice), start, end: start + slice.length });
       if (end >= units.length) break;
     }
 
     return chunks;
   }
+}
+
+/**
+ * Units in text as the chunker counts them. Counts add up across text joined
+ * with whitespace, so offsets of pages or lines can be summed.
+ */
+export function countUnits(text: string): number {
+  let count = 0;
+  for (const word of text.split(/\s+/)) {
+    if (word) count += wordUnits(word).length;
+  }
+  return count;
 }
 
 /**

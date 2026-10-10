@@ -37,3 +37,22 @@ describe("generateAnswer", () => {
     expect(options).not.toHaveProperty("temperature");
   });
 });
+
+describe("generateAnswer cancellation", () => {
+  it("passes the signal to the AI SDK and throws AbortError when aborted", async () => {
+    const controller = new AbortController();
+    generateText.mockImplementationOnce(async (options: Record<string, unknown>) => {
+      expect(options["abortSignal"]).toBe(controller.signal);
+      controller.abort();
+      throw new Error("request aborted");
+    });
+    await expect(
+      generateAnswer({
+        llm: { provider: "openai", apiKey: "k" },
+        question: "q",
+        context: [],
+        signal: controller.signal,
+      }),
+    ).rejects.toMatchObject({ name: "AbortError" });
+  });
+});

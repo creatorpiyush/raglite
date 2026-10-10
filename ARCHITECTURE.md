@@ -29,8 +29,10 @@ raglite/src/
 ├── chunking/        # Text splitting algorithms
 │   ├── base.ts
 │   ├── index.ts
+│   ├── locations.ts  # page and markdown section of each chunk
 │   └── recursive.ts
 ├── core/            # Main facade orchestrator
+│   ├── collection.ts
 │   └── document.ts
 ├── embeddings/      # Embedding provider factory & adapters
 │   ├── base.ts
@@ -45,14 +47,18 @@ raglite/src/
 │   ├── index.ts
 │   ├── models.ts
 │   └── prompt.ts
+├── mcp/
+│   └── server.ts     # MCP server: search, ask, list_sources (optional peer SDK)
 ├── loaders/         # Document parser implementations
 │   ├── base.ts
 │   ├── docx.ts       # Mammoth reader
 │   ├── index.ts
 │   ├── json.ts
 │   ├── markdown.ts
-│   ├── pdf.ts        # pdf-parse reader
+│   ├── pdf.ts        # unpdf reader; keeps page texts for page numbers
 │   └── txt.ts
+├── tools/
+│   └── search-tool.ts  # asTool(): Vercel AI SDK tool, shared passage shape
 ├── retrieval/       # Retriever & ranking algorithms
 │   ├── index.ts
 │   └── retriever.ts
@@ -144,6 +150,15 @@ graph TD
    - Runs `search(question)` with the same retrieval options.
    - Constructs context-augmented system/user prompt via `buildPrompt()`.
    - Calls `generateAnswer()` or `streamAnswer()` with selected LLM adapter (OpenAI, Anthropic, Google, Groq, Ollama, etc.).
+
+### 4.3 Citations and chunk locations
+- `RecursiveChunker.spans()` returns each chunk with the range of units it covers. `chunking/locations.ts` maps that range to a page (PDF page texts from the loader) or to the markdown heading path in effect, and `build()` stores `page`, `pageEnd` and `section` in the chunk metadata. Chunk boundaries do not depend on it, so existing indexes stay valid.
+- The prompt labels each passage `[n] (source #chunk, p. 12, Section)`. `extractCitations()` reads the `[n]` markers in the answer and returns those passages as `citations`.
+- `tests/fixtures/shared/locations.json` pins page, section and citation parsing for both SDKs.
+
+### 4.4 Agents
+- `raglite mcp` builds the index, then serves it with `serveMcp()` over stdio. All logs go to stderr, because stdout carries the protocol.
+- `asTool()` wraps `search()` as a Vercel AI SDK tool; the MCP `search` tool returns the same passage shape (`toPassage()`).
 
 ---
 

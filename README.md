@@ -10,6 +10,8 @@ Build semantic search, multi-provider question answering, and REST APIs over you
 - **Content-hash cache invalidation** — reindexes only when the file actually changes
 - **Per-document namespacing** — indexes are isolated, so two documents never collide
 - **REST API** via Hono with optional **bearer-token auth**
+- **Citations** with page numbers and section headings
+- **MCP server** and **AI SDK tool** for agents
 - **Streaming** answers
 - **TypeScript-first**, ESM, strict types
 
@@ -114,6 +116,80 @@ The tokenizer is the same in the TypeScript and Python SDKs:
 | Chinese, Japanese, Korean, Thai, Lao, Khmer, Myanmar | Overlapping character pairs (`退款处理` → `退款`, `款处`, `处理`), so no dictionary is needed |
 
 There is no stemming or stopword list, because both are language-specific: in keyword mode `refund` does not match `refunds`. Hybrid mode's vector side covers those cases.
+
+## Citations
+
+`ask()` returns the passages the answer cites, with the page (PDF) and heading path (Markdown) of each:
+
+```ts
+const answer = await doc.ask("What is the refund policy?");
+answer.text;       // "Refunds are issued within 30 days [1]."
+answer.citations;  // [{ n: 1, source: "policy.pdf", chunk: 4, page: 12, section: "Policies > Refunds", text: "..." }]
+```
+
+- `n` is the number used in the answer. `[2]`, `[1][3]` and `[1, 3]` are all recognised; numbers that match no passage are ignored.
+- Search results carry the same `page`, `pageEnd` (when a chunk crosses a page break) and `section` in `metadata`.
+- Indexes built before 2.1 have no page or section until you run `build({ rebuild: true })`. Answers still get `citations`, without those fields.
+- The REST `/ask` response includes `citations`, and `raglite ask` lists the sources under the answer.
+
+## Use from AI agents (MCP)
+
+`raglite mcp` serves your documents to any MCP client (Claude Code, Claude Desktop, Cursor, VS Code) over stdio. `npx` can fetch everything it needs, including the MCP SDK and local embeddings:
+
+```bash
+claude mcp add docs -- npx -y -p raglite-toolkit -p @modelcontextprotocol/sdk -p @huggingface/transformers \
+  raglite mcp /absolute/path/to/docs --store-dir /absolute/path/to/docs/.raglite
+```
+
+Claude Desktop, Cursor and VS Code use the same command in their MCP settings:
+
+```json
+{
+  "mcpServers": {
+    "docs": {
+      "command": "npx",
+      "args": ["-y", "-p", "raglite-toolkit", "-p", "@modelcontextprotocol/sdk", "-p", "@huggingface/transformers",
+               "raglite", "mcp", "/absolute/path/to/docs", "--store-dir", "/absolute/path/to/docs/.raglite"]
+    }
+  }
+}
+```
+
+- Use absolute paths, and pass `--store-dir`: MCP clients may start the server in any directory, and the index is kept in `./.raglite` by default.
+- The first start installs the packages and indexes the documents, which can take longer than a client waits. Run the same command once in a terminal first (stop it with Ctrl+C); later starts reuse both.
+- In a project that already has `raglite-toolkit` and `@modelcontextprotocol/sdk` installed, `npx raglite mcp ./docs --store-dir ./.raglite` is enough.
+
+Tools: `search` (`query`, optional `topK` and `mode`), `list_sources`, and `ask` when you pass `--llm-provider`. Add `--embed-provider` and the other `raglite index` flags as needed. From code, `serveMcp(collection)` or `createMcpServer(collection)` (for other transports).
+
+## Use as an agent tool
+
+`asTool()` turns a document or collection into a [Vercel AI SDK](https://ai-sdk.dev) tool:
+
+```ts
+import { generateText, stepCountIs } from "ai";
+
+const { text } = await generateText({
+  model,
+  tools: { searchPolicies: doc.asTool({ description: "Search the company policies.", topK: 5 }) },
+  stopWhen: stepCountIs(3),
+  prompt: "Can I return an opened item?",
+});
+```
+
+The tool takes a `query` and returns passages: `source`, `chunk`, `page`, `section`, `score` and `text`.
+
+## Progress and cancellation
+
+```ts
+const controller = new AbortController();
+await collection.build({
+  onProgress: ({ source, embedded, total }) => console.log(`${source}: ${embedded}/${total}`),
+  signal: controller.signal,
+});
+await doc.ask("...", { signal: controller.signal });
+```
+
+Chunks are embedded in batches of 64, with `onProgress` called after each. An aborted build throws an `AbortError` and keeps the previous index, because the old index is replaced only once embedding finishes.
 
 ## Choose any LLM at ask-time
 
@@ -284,6 +360,7 @@ raglite search ./docs "refund policy" --top-k 3
 raglite search ./docs "ERR_4021" --mode hybrid
 raglite ask ./docs "What is the refund policy?" \
   --llm-provider anthropic --llm-key $ANTHROPIC_API_KEY --stream
+raglite mcp ./docs --llm-provider anthropic   # MCP server over stdio
 raglite serve https://example.com \
   --llm-provider openai --llm-key $OPENAI_API_KEY \
   --port 8085 --token $RAGLITE_TOKEN

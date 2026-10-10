@@ -23,8 +23,13 @@ Usage:
                              [--vector-provider P] [--vector-url U] [--vector-key K] [--vector-index I] [--vector-store-dir D]
   raglite serve <path|url>            --llm-provider P [--llm-key K] [--host H] [--port N] [--token T] [--mode M]
                              [--vector-provider P] [--vector-url U] [--vector-key K] [--vector-index I] [--vector-store-dir D]
+  raglite mcp <path|url>              [--llm-provider P] [--llm-model M] [--llm-key K] [--mode M]
+                             [--vector-provider P] [--vector-url U] [--vector-key K] [--vector-index I] [--vector-store-dir D]
+                             MCP server over stdio (needs: npm install @modelcontextprotocol/sdk)
   raglite --help
   raglite --version
+
+Every command also takes --store-dir D: where indexes are kept (default ./.raglite).
 
 Providers:
   LLM:        openai, anthropic, google, mistral, cohere, groq, xai, ollama
@@ -59,6 +64,8 @@ async function main(): Promise<void> {
       return runAsk(rest);
     case "serve":
       return runServe(rest);
+    case "mcp":
+      return runMcp(rest);
     default:
       process.stderr.write(`Unknown command: ${command}\n\n${HELP}`);
       process.exit(2);
@@ -127,7 +134,18 @@ const COMMON_VECTOR_OPTIONS = {
   "vector-key": { type: "string" },
   "vector-index": { type: "string" },
   "vector-store-dir": { type: "string" },
+  "store-dir": { type: "string" },
 } as const;
+
+/** Where indexes live (default ./.raglite), and an optional external vector store. */
+function storeOptions(values: Record<string, unknown>): {
+  vectorStore?: VectorStoreProviderConfig;
+  storeDir?: string;
+} {
+  const vectorStore = parseVectorStore(values);
+  const storeDir = values["store-dir"] as string | undefined;
+  return { ...(vectorStore ? { vectorStore } : {}), ...(storeDir ? { storeDir } : {}) };
+}
 
 async function runIndex(args: string[]): Promise<void> {
   const { values, positionals } = parseArgs({
@@ -147,7 +165,7 @@ async function runIndex(args: string[]): Promise<void> {
 
   const collection = new DocumentCollection(pathOrUrl, {
     ...embeddingOption(values),
-    vectorStore: parseVectorStore(values),
+    ...storeOptions(values),
   });
   const result = await collection.build({
     ...(values["chunk-size"] ? { chunkSize: Number(values["chunk-size"]) } : {}),
@@ -176,7 +194,7 @@ async function runSearch(args: string[]): Promise<void> {
 
   const collection = new DocumentCollection(pathOrUrl, {
     ...embeddingOption(values),
-    vectorStore: parseVectorStore(values),
+    ...storeOptions(values),
   });
   const results = await collection.search(query, {
     ...(values["top-k"] ? { topK: Number(values["top-k"]) } : {}),
@@ -210,7 +228,7 @@ async function runAsk(args: string[]): Promise<void> {
   const collection = new DocumentCollection(pathOrUrl, {
     ...embeddingOption(values),
     llm,
-    vectorStore: parseVectorStore(values),
+    ...storeOptions(values),
   });
 
   const opts: Parameters<DocumentCollection["ask"]>[1] = {};
@@ -226,6 +244,15 @@ async function runAsk(args: string[]): Promise<void> {
   } else {
     const answer = await collection.ask(question, opts);
     process.stdout.write(`${answer.text}\n`);
+    if (answer.citations.length > 0) {
+      process.stdout.write("\nSources:\n");
+      for (const c of answer.citations) {
+        const where = [c.page !== undefined ? `p. ${c.page}` : "", c.section ?? ""].filter(Boolean);
+        process.stdout.write(
+          `  [${c.n}] ${c.source}${where.length ? ` (${where.join(", ")})` : ""}\n`,
+        );
+      }
+    }
   }
 }
 
@@ -253,7 +280,7 @@ async function runServe(args: string[]): Promise<void> {
   const collection = new DocumentCollection(pathOrUrl, {
     ...embeddingOption(values),
     ...(llm ? { llm } : {}),
-    vectorStore: parseVectorStore(values),
+    ...storeOptions(values),
     ...(mode ? { retrieval: { mode } } : {}),
   });
   await collection.build();
@@ -266,6 +293,35 @@ async function runServe(args: string[]): Promise<void> {
 
   const handle = await collection.serve(serveOpts);
   process.stdout.write(`RagLite listening on ${handle.url}\n`);
+}
+
+async function runMcp(args: string[]): Promise<void> {
+  const { values, positionals } = parseArgs({
+    args,
+    allowPositionals: true,
+    options: {
+      "embed-provider": { type: "string" },
+      "embed-model": { type: "string" },
+      "embed-key": { type: "string" },
+      "llm-provider": { type: "string" },
+      "llm-model": { type: "string" },
+      "llm-key": { type: "string" },
+      mode: { type: "string" },
+      ...COMMON_VECTOR_OPTIONS,
+    },
+  });
+  const pathOrUrl = requirePositional(positionals, 0, "path|url");
+  const llm = parseLLM(values);
+  const mode = parseMode(values);
+  const collection = new DocumentCollection(pathOrUrl, {
+    ...embeddingOption(values),
+    ...(llm ? { llm } : {}),
+    ...storeOptions(values),
+    ...(mode ? { retrieval: { mode } } : {}),
+  });
+  await collection.build();
+  const { serveMcp } = await import("./mcp/server.js");
+  await serveMcp(collection);
 }
 
 function requirePositional(positionals: string[], index: number, name: string): string {

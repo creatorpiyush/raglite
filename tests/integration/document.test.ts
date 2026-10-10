@@ -3,6 +3,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MockEmbedder } from "../helpers/mock-embedder.js";
+import { makePdf } from "../helpers/pdf.js";
 import { makeTempWorkspace, type TempWorkspace } from "../helpers/tmp.js";
 
 const mockEmbedder = new MockEmbedder();
@@ -293,5 +294,89 @@ describe("indexes built with a shut-down embedding model", () => {
     const embeddings = { provider: "google" as const, model: "text-embedding-004" };
     expect((await new Document(p, { ...opts, embeddings }).build()).cached).toBe(true);
     expect(mockEmbedder.embedDocumentsCalls).toBe(0);
+  });
+});
+
+describe("chunk locations", () => {
+  it("records the page of each PDF chunk", async () => {
+    const p = join(ws.root, "guide.pdf");
+    await writeFile(p, makePdf(["alpha beta gamma delta", "epsilon zeta", "eta theta iota"]));
+    const doc = new Document(p, {
+      storeDir: join(ws.root, ".raglite"),
+      chunkSize: 4,
+      overlap: 0,
+      logLevel: "silent",
+    });
+    await doc.build();
+    const chunks = (await doc.vectorStore.listChunks!()).map((c) => [
+      c.text,
+      c.metadata.page,
+      c.metadata.pageEnd,
+    ]);
+    expect(chunks).toEqual([
+      ["alpha beta gamma delta", 1, undefined],
+      ["epsilon zeta eta theta", 2, 3],
+      ["iota", 3, undefined],
+    ]);
+  });
+
+  it("records the heading path of each markdown chunk", async () => {
+    const p = ws.file("guide.md", "# Policies\nIntro.\n## Refunds\nRefunds take thirty days.");
+    const doc = new Document(p, {
+      storeDir: join(ws.root, ".raglite"),
+      chunkSize: 3,
+      overlap: 0,
+      logLevel: "silent",
+    });
+    await doc.build();
+    const sections = (await doc.vectorStore.listChunks!()).map((c) => c.metadata.section);
+    expect(sections).toEqual(["Policies", "Policies > Refunds", "Policies > Refunds"]);
+  });
+});
+
+describe("build() progress and cancellation", () => {
+  const manyWords = Array.from({ length: 200 }, (_, i) => `word${i}`).join(" ");
+
+  it("reports progress after each embedding batch", async () => {
+    const p = ws.file("big.txt", manyWords);
+    const progress: number[] = [];
+    const doc = new Document(p, {
+      storeDir: join(ws.root, ".raglite"),
+      chunkSize: 2,
+      overlap: 0,
+      logLevel: "silent",
+    });
+    await doc.build({
+      onProgress: ({ source, embedded, total }) =>
+        progress.push(embedded, total, source === "big.txt" ? 1 : 0),
+    });
+    // 100 chunks in batches of 64.
+    expect(progress).toEqual([64, 100, 1, 100, 100, 1]);
+  });
+
+  it("stops when the signal aborts and keeps the previous index", async () => {
+    const p = ws.file("big.txt", manyWords);
+    const opts = {
+      storeDir: join(ws.root, ".raglite"),
+      chunkSize: 2,
+      overlap: 0,
+      logLevel: "silent" as const,
+    };
+    const doc = new Document(p, opts);
+    await doc.build();
+    mockEmbedder.embedDocumentsCalls = 0;
+
+    const controller = new AbortController();
+    const rebuild = new Document(p, opts).build({
+      rebuild: true,
+      signal: controller.signal,
+      onProgress: () => controller.abort(),
+    });
+
+    await expect(rebuild).rejects.toMatchObject({ name: "AbortError" });
+    expect(mockEmbedder.embedDocumentsCalls).toBe(1); // stopped after the first batch
+    const reopened = new Document(p, opts);
+    expect((await reopened.search("word5", { mode: "keyword", topK: 1 })).length).toBe(1);
+    expect(reopened.chunkCount).toBe(100);
   });
 });

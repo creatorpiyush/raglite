@@ -1,7 +1,13 @@
 import { existsSync } from "node:fs";
-import { basename, join, resolve } from "node:path";
+import { basename, extname, join, resolve } from "node:path";
 import { createServer, type ServeOptions, type ServerHandle } from "../api/index.js";
 import { RecursiveChunker } from "../chunking/index.js";
+import {
+  chunkLocation,
+  markdownHeadings,
+  pageStarts,
+  type SourceLayout,
+} from "../chunking/locations.js";
 import { type DocumentOptions, type ResolvedConfig, resolveConfig } from "../config.js";
 import {
   DEFAULT_STORE_DIRNAME,
@@ -18,7 +24,7 @@ import {
   type PromptOptions,
   streamAnswer,
 } from "../llm/index.js";
-import { getLoader, isUrl } from "../loaders/index.js";
+import { type BaseLoader, getLoader, isUrl } from "../loaders/index.js";
 import { type RankedList, reciprocalRankFusion } from "../retrieval/fusion.js";
 import {
   type KeywordHit,
@@ -30,6 +36,7 @@ import {
 import { type RetrievalPlan, resolveRetrievalPlan } from "../retrieval/plan.js";
 import { Retriever } from "../retrieval/retriever.js";
 import { hasUnspacedText } from "../text/scripts.js";
+import { type SearchToolOptions, searchTool } from "../tools/search-tool.js";
 import type {
   ChunkMetadata,
   EmbeddingProviderConfig,
@@ -52,6 +59,18 @@ export interface IndexOptions {
   /** Defaults to the constructor option, then to the existing index's provider and model, then to local. */
   embeddings?: EmbeddingProviderConfig;
   rebuild?: boolean;
+  /** Called after each batch of chunks is embedded. */
+  onProgress?: (progress: BuildProgress) => void;
+  /** Stops the build between embedding batches; the previous index is kept. */
+  signal?: AbortSignal;
+}
+
+export interface BuildProgress {
+  /** The document being indexed (file name, URL or fromText id). */
+  source: string;
+  /** Chunks embedded so far. */
+  embedded: number;
+  total: number;
 }
 
 export interface SearchOptions {
@@ -72,6 +91,8 @@ export interface RetrievalCandidates {
 
 export interface AskOptions extends SearchOptions, PromptOptions {
   llm?: LLMProviderConfig;
+  /** Cancels the LLM request. */
+  signal?: AbortSignal;
 }
 
 export interface IndexBuildResult {
@@ -174,11 +195,17 @@ export class Document {
       options.chunkSize ?? this.chunking.chunkSize ?? existing?.chunkSize ?? this.config.chunkSize;
     const overlap =
       options.overlap ?? this.chunking.overlap ?? existing?.overlap ?? this.config.overlap;
+    // The loader that produced `text`, for page boundaries.
+    let loader: BaseLoader | null = null;
+    const loadText = () => {
+      loader = getLoader(this.filePath);
+      return loader.load();
+    };
     // Web pages change without their URL changing, so fingerprint the
     // fetched content rather than the URL.
     let text: string | null = this.inlineText ?? null;
     if (text === null && isUrl(this.filePath)) {
-      text = await getLoader(this.filePath).load();
+      text = await loadText();
     }
     const sourceHash = text !== null ? hashString(text) : await hashFile(this.filePath);
 
@@ -199,7 +226,7 @@ export class Document {
       // Format 2 only changed how unspaced scripts are chunked, so a format-1
       // index of a source without such text is still exact: upgrade it in
       // place instead of paying to re-embed it.
-      text ??= await getLoader(this.filePath).load();
+      text ??= await loadText();
       reusable = indexFormatVersion(existing) === 1 && !hasUnspacedText(text);
       if (reusable) {
         await this.store.saveIndexMetadata({ ...existing, formatVersion: INDEX_FORMAT_VERSION });
@@ -220,39 +247,59 @@ export class Document {
     }
 
     this.logger.info("Building new index...");
-    this.keywordIndex = null;
-    await this.store.reset();
-    await this.store.load();
 
-    text ??= await getLoader(this.filePath).load();
+    text ??= await loadText();
     if (!text) {
       throw new LoaderError(`Loader returned empty text for ${this.filePath}`);
     }
 
     const chunker = new RecursiveChunker(chunkSize, overlap);
-    const chunks = chunker.split(text);
+    const spans = chunker.spans(text);
+    const chunks = spans.map((span) => span.text);
+    const layout: SourceLayout = {};
+    const pages = (loader as BaseLoader | null)?.pages;
+    if (pages) layout.pageStarts = pageStarts(pages);
+    if (
+      this.inlineText === undefined &&
+      MARKDOWN_EXTENSIONS.has(extname(this.filePath).toLowerCase())
+    ) {
+      layout.headings = markdownHeadings(text);
+    }
     if (chunks.length === 0) {
       throw new RagLiteError(`No chunks produced from ${this.filePath}`);
     }
     this.logger.info(`Produced ${chunks.length} chunk(s). Embedding...`);
 
+    const source =
+      this.inlineText !== undefined || isUrl(this.filePath)
+        ? this.filePath
+        : basename(this.filePath);
     const embedder = await createEmbedder(embeddingsConfig);
-    const vectors = await embedder.embedDocuments(chunks);
+    // Batches so progress can be reported and a cancelled build stops early.
+    const vectors: number[][] = [];
+    for (let i = 0; i < chunks.length; i += EMBED_BATCH_SIZE) {
+      options.signal?.throwIfAborted();
+      const batch = chunks.slice(i, i + EMBED_BATCH_SIZE);
+      const embedded = await embedder.embedDocuments(
+        batch,
+        options.signal ? { signal: options.signal } : undefined,
+      );
+      vectors.push(...embedded);
+      options.onProgress?.({ source, embedded: vectors.length, total: chunks.length });
+    }
+    options.signal?.throwIfAborted();
     if (vectors.length !== chunks.length) {
       throw new RagLiteError(
         `Embedder returned ${vectors.length} vectors for ${chunks.length} chunks`,
       );
     }
 
-    const source =
-      this.inlineText !== undefined || isUrl(this.filePath)
-        ? this.filePath
-        : basename(this.filePath);
     const stored: StoredChunk[] = chunks.map((text, index) => {
       const metadata: ChunkMetadata = {
         source,
         chunk: index + 1,
         totalChunks: chunks.length,
+        ...chunkLocation(layout, spans[index]!),
       };
       return {
         id: `${this.namespace}_${(index + 1).toString().padStart(6, "0")}`,
@@ -262,6 +309,10 @@ export class Document {
       };
     });
 
+    // Replace the old index only now, so a failed or cancelled build keeps it.
+    this.keywordIndex = null;
+    await this.store.reset();
+    await this.store.load();
     await this.store.add(stored);
 
     const metadata: IndexMetadata = {
@@ -355,6 +406,7 @@ export class Document {
       context,
       includeCitations: options.includeCitations,
       systemHint: options.systemHint,
+      ...(options.signal ? { signal: options.signal } : {}),
     });
   }
 
@@ -375,6 +427,7 @@ export class Document {
       context,
       includeCitations: options.includeCitations,
       systemHint: options.systemHint,
+      ...(options.signal ? { signal: options.signal } : {}),
     });
   }
 
@@ -396,6 +449,17 @@ export class Document {
   /** Underlying vector store (advanced use). */
   get vectorStore(): VectorStore {
     return this.store;
+  }
+
+  /**
+   * An AI SDK tool that searches this document, for `generateText({ tools })` and agents.
+   *
+   * ```ts
+   * await generateText({ model, tools: { searchDocs: doc.asTool() }, prompt });
+   * ```
+   */
+  asTool(options: SearchToolOptions = {}) {
+    return searchTool(this, options);
   }
 
   /**
@@ -516,6 +580,9 @@ function queryEmbeddingsConfig(
   }
   return config;
 }
+
+const MARKDOWN_EXTENSIONS = new Set([".md", ".markdown"]);
+const EMBED_BATCH_SIZE = 64;
 
 function indexUsesRetiredModel(metadata: IndexMetadata): boolean {
   return isRetiredEmbeddingModel(metadata.embeddingProvider, metadata.embeddingModel);
