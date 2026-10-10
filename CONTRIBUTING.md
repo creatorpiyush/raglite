@@ -20,7 +20,7 @@ npm run verify      # typecheck, lint and tests
 1. Branch from `main` with a descriptive name, such as `fix/pdf-page-numbers` or `feat/pgvector-store`.
 2. Add or update tests next to the code you change (`tests/unit`, `tests/integration`). Tests must not call real provider APIs; use the mocks in `tests/helpers`.
 3. Run `bash scripts/pre-commit.sh` (lint, typecheck, tests).
-4. Add an entry under a dated version heading in `CHANGELOG.md`, and update `README.md` if users will notice the change.
+4. Add an entry under a dated version heading in `CHANGELOG.md`, and update the [documentation](#documentation) if users will notice the change.
 5. Open a pull request and fill in the template.
 
 ### Dependencies
@@ -43,6 +43,19 @@ npx biome check --write tests/fixtures
 ```
 
 Then copy them to raglite-py with `python scripts/sync_shared_fixtures.py --source ../raglite` and make its tests pass too.
+
+## Documentation
+
+The documentation site for both SDKs, https://creatorpiyush.github.io/raglite/, lives in `docs/` (Astro Starlight; Node.js 22.12 or later). Each code sample has a TypeScript and a Python tab, so a change in either SDK may need a docs change here. A user-visible change ships with its docs update in the same release.
+
+```bash
+cd docs
+npm install
+npm run dev         # http://localhost:4321/raglite/
+npm run build       # what CI runs on pull requests that touch docs/
+```
+
+Merging to `main` deploys the site. `tests/unit/docs.test.ts` fails if a default model is missing from the providers page. Keep `README.md` short: it is what npm shows, so it links to the site instead of repeating it.
 
 ## Live provider check
 

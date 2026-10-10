@@ -53,10 +53,10 @@ Each file gets its own index, so `build()` re-embeds only the files that changed
 A folder is scanned recursively for supported files (PDF, DOCX, Markdown, TXT, JSON).
 
 - Unsupported and empty files are skipped and reported in `errors`.
-- The TypeScript SDK skips hidden folders (such as `.git` and `.raglite`) and `node_modules`.
+- Hidden files and folders (such as `.git`, `.venv` and `.raglite`) and `node_modules` are skipped.
 
-:::caution[Python]
-The Python SDK does not skip hidden folders yet. Keep `storeDir` and virtual environments outside the folder you index, or their files are indexed too.
+:::note[Python before 2.1.1]
+Python versions before 2.1.1 do not skip hidden folders or `node_modules`. On those versions, keep `storeDir` and virtual environments outside the folder you index.
 :::
 
 Glob patterns such as `./docs/*.md` are not expanded. Pass a folder, or a list of files.

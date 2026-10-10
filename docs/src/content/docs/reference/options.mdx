@@ -94,6 +94,43 @@ Every error extends `RagLiteError`.
 | `VectorDBError` | The vector store failed |
 | `BuildCancelledError` | Python only: a build was cancelled. TypeScript throws the signal's `AbortError` |
 
+## Building blocks
+
+The pieces `Document` uses are exported for use on their own, for example to embed text for another system or to chunk text the same way RAGLite does.
+
+<Tabs syncKey="lang">
+<TabItem label="TypeScript">
+
+```ts
+import { createEmbedder, getLoader, RecursiveChunker } from "raglite-toolkit";
+
+const text = await getLoader("./policy.pdf").load();
+const chunks = new RecursiveChunker(500, 50).split(text);
+
+const embedder = await createEmbedder({ provider: "openai" });
+const vectors = await embedder.embedDocuments(chunks);
+const query = await embedder.embedQuery("refund policy");
+```
+
+</TabItem>
+<TabItem label="Python">
+
+```python
+from raglite import RecursiveChunker, create_embedder, get_loader
+
+text = get_loader("./policy.pdf").load()
+chunks = RecursiveChunker(500, 50).split(text)
+
+embedder = create_embedder({"provider": "openai"})
+vectors = embedder.embed_documents(chunks)
+query = embedder.embed_query("refund policy")
+```
+
+</TabItem>
+</Tabs>
+
+Loaders and chunkers cannot be swapped inside a `Document`. To index text from another format, extract it yourself and use `Document.fromText()` / `Document.from_text()`.
+
 ## Exports
 
 <Tabs syncKey="lang">
