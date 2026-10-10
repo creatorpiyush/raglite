@@ -1,5 +1,5 @@
 export const PACKAGE_NAME = "raglite";
-export const PACKAGE_VERSION = "2.0.1";
+export const PACKAGE_VERSION = "2.1.0";
 
 /**
  * Version of the on-disk/in-store index layout (chunking, ids, payloads).

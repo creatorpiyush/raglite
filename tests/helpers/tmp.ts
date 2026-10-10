@@ -1,6 +1,6 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 export interface TempWorkspace {
   root: string;
@@ -14,6 +14,7 @@ export function makeTempWorkspace(prefix = "raglite-"): TempWorkspace {
     root,
     file(name, contents) {
       const p = join(root, name);
+      mkdirSync(dirname(p), { recursive: true });
       writeFileSync(p, contents, "utf-8");
       return p;
     },

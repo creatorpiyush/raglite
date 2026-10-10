@@ -37,6 +37,12 @@ export interface ChunkMetadata {
   source: string;
   chunk: number;
   totalChunks: number;
+  /** First page of the chunk (1-based), for PDFs. */
+  page?: number;
+  /** Last page, when the chunk crosses a page break. */
+  pageEnd?: number;
+  /** Markdown heading path, e.g. "Policies > Refunds". */
+  section?: string;
   [key: string]: unknown;
 }
 

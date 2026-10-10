@@ -13,6 +13,7 @@ import { DirectoryLoader, isSupportedFile, isUrl } from "../loaders/index.js";
 import { reciprocalRankFusion } from "../retrieval/fusion.js";
 import { byScoreThenId, type KeywordHit } from "../retrieval/keyword-index.js";
 import { resolveRetrievalPlan } from "../retrieval/plan.js";
+import { type SearchToolOptions, searchTool } from "../tools/search-tool.js";
 import type { LLMProviderConfig, SearchResult } from "../types.js";
 import { createLogger, type Logger } from "../utils/logger.js";
 import {
@@ -34,6 +35,8 @@ export interface CollectionBuildResult {
 
 export interface CollectionAskOptions extends SearchOptions, PromptOptions {
   llm?: LLMProviderConfig;
+  /** Cancels the LLM request. */
+  signal?: AbortSignal;
 }
 
 /**
@@ -148,6 +151,7 @@ export class DocumentCollection {
           newDocs++;
         }
       } catch (err: unknown) {
+        if (options.signal?.aborted) throw err;
         const errMsg = err instanceof Error ? err.message : String(err);
         this.logger.error(`Failed to index document "${filePath}": ${errMsg}`);
         errors.push({ source: filePath, error: errMsg });
@@ -263,6 +267,7 @@ export class DocumentCollection {
       context,
       includeCitations: options.includeCitations,
       systemHint: options.systemHint,
+      ...(options.signal ? { signal: options.signal } : {}),
     });
   }
 
@@ -293,7 +298,19 @@ export class DocumentCollection {
       context,
       includeCitations: options.includeCitations,
       systemHint: options.systemHint,
+      ...(options.signal ? { signal: options.signal } : {}),
     });
+  }
+
+  /**
+   * An AI SDK tool that searches every document in the collection, for `generateText({ tools })` and agents.
+   *
+   * ```ts
+   * await generateText({ model, tools: { searchDocs: collection.asTool() }, prompt });
+   * ```
+   */
+  asTool(options: SearchToolOptions = {}) {
+    return searchTool(this, options);
   }
 
   /**

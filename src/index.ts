@@ -11,6 +11,7 @@ export {
   SearchRequestSchema,
 } from "./api/index.js";
 export { BaseChunker, RecursiveChunker } from "./chunking/index.js";
+export type { ChunkLocation } from "./chunking/locations.js";
 export type { DocumentOptions } from "./config.js";
 export { PACKAGE_NAME, PACKAGE_VERSION, PACKAGE_VERSION as VERSION } from "./constants.js";
 export type {
@@ -20,13 +21,13 @@ export type {
 export { DocumentCollection } from "./core/collection.js";
 export type {
   AskOptions,
+  BuildProgress,
   IndexBuildResult,
   IndexOptions,
   SearchOptions,
 } from "./core/document.js";
 export { Document } from "./core/document.js";
 export type { Embedder } from "./embeddings/index.js";
-
 export {
   createEmbedder,
   DEFAULT_EMBEDDING_MODELS,
@@ -40,12 +41,14 @@ export {
   FileNotIndexedError,
   LLMError,
   LoaderError,
+  missingPackage,
   RagLiteError,
   UnsupportedFileTypeError,
   VectorDBError,
 } from "./errors.js";
 export type {
   AnswerResult,
+  Citation,
   GenerateAnswerOptions,
   PromptOptions,
   ResolvedLLM,
@@ -55,6 +58,7 @@ export {
   buildUserPrompt,
   createLLM,
   DEFAULT_LLM_MODELS,
+  extractCitations,
   generateAnswer,
   streamAnswer,
 } from "./llm/index.js";
@@ -71,6 +75,8 @@ export {
   TxtLoader,
   WebLoader,
 } from "./loaders/index.js";
+export type { McpServerOptions, McpTarget } from "./mcp/server.js";
+export { createMcpServer, serveMcp } from "./mcp/server.js";
 export type {
   KeywordHit,
   KeywordIndexFile,
@@ -85,6 +91,8 @@ export {
   resolveRetrievalPlan,
 } from "./retrieval/index.js";
 export { TOKENIZER_NAME, tokenize } from "./text/tokenizer.js";
+export type { Passage, SearchToolOptions } from "./tools/search-tool.js";
+export { searchTool, toPassage } from "./tools/search-tool.js";
 export type {
   ChunkMetadata,
   EmbeddingProviderConfig,

@@ -16,10 +16,10 @@ export function createLogger(level: LogLevel = "info"): Logger {
 
   return {
     info: (message, ...args) => {
-      if (shouldLog("info")) console.log(`[raglite] ${message}`, ...args);
+      if (shouldLog("info")) console.error(`[raglite] ${message}`, ...args);
     },
     debug: (message, ...args) => {
-      if (shouldLog("debug")) console.log(`[raglite:debug] ${message}`, ...args);
+      if (shouldLog("debug")) console.error(`[raglite:debug] ${message}`, ...args);
     },
     warn: (message, ...args) => {
       if (level !== "silent") console.warn(`[raglite] ${message}`, ...args);

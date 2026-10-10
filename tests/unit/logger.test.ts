@@ -29,22 +29,24 @@ describe("createLogger", () => {
     expect(errorSpy).not.toHaveBeenCalled();
   });
 
-  it("info mode emits info/warn/error but not debug", () => {
+  it("info mode emits info/warn/error but not debug, all on stderr", () => {
     const logger = createLogger("info");
     logger.info("i");
     logger.debug("d");
     logger.warn("w");
     logger.error("e");
-    expect(logSpy).toHaveBeenCalledTimes(1);
+    // stdout stays clean for command output and the MCP stdio protocol.
+    expect(logSpy).not.toHaveBeenCalled();
     expect(warnSpy).toHaveBeenCalledTimes(1);
-    expect(errorSpy).toHaveBeenCalledTimes(1);
-    expect(logSpy.mock.calls[0]![0]).toMatch(/\[raglite\] i/);
+    expect(errorSpy).toHaveBeenCalledTimes(2);
+    expect(errorSpy.mock.calls[0]![0]).toMatch(/\[raglite\] i/);
   });
 
   it("debug mode emits everything", () => {
     const logger = createLogger("debug");
     logger.debug("d");
     logger.info("i");
-    expect(logSpy).toHaveBeenCalledTimes(2);
+    expect(errorSpy).toHaveBeenCalledTimes(2);
+    expect(logSpy).not.toHaveBeenCalled();
   });
 });

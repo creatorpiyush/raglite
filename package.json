@@ -1,6 +1,6 @@
 {
   "name": "raglite-toolkit",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "description": "Build semantic search, multi-provider question answering, and REST APIs over your documents in a few lines of TypeScript.",
   "type": "module",
   "main": "./dist/index.js",
@@ -63,7 +63,9 @@
     "hono",
     "ai",
     "chatbot",
-    "question-answering"
+    "question-answering",
+    "mcp",
+    "model-context-protocol"
   ],
   "author": "Piyush Anand",
   "license": "MIT",
@@ -99,6 +101,7 @@
     "@ai-sdk/xai": "^4.0.13",
     "@huggingface/transformers": "^4.2.0",
     "@lancedb/lancedb": "^0.4.0",
+    "@modelcontextprotocol/sdk": "^1.31.0",
     "ollama-ai-provider-v2": "^4.0.1",
     "voyage-ai-provider": "^4.0.0"
   },
@@ -130,6 +133,9 @@
     "@lancedb/lancedb": {
       "optional": true
     },
+    "@modelcontextprotocol/sdk": {
+      "optional": true
+    },
     "ollama-ai-provider-v2": {
       "optional": true
     },
@@ -151,6 +157,7 @@
     "@biomejs/biome": "^2.5.4",
     "@huggingface/transformers": "^4.2.0",
     "@lancedb/lancedb": "^0.4.0",
+    "@modelcontextprotocol/sdk": "^1.31.0",
     "@types/node": "^22.7.0",
     "@vitest/coverage-v8": "^4.1.10",
     "ollama-ai-provider-v2": "^4.0.1",

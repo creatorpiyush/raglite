@@ -1,0 +1,274 @@
+{
+  "chunks": [
+    {
+      "name": "one page",
+      "pages": ["Refunds within 30 days."],
+      "chunkSize": 500,
+      "overlap": 50,
+      "chunks": [
+        {
+          "text": "Refunds within 30 days.",
+          "start": 0,
+          "end": 4,
+          "page": 1
+        }
+      ]
+    },
+    {
+      "name": "chunks across pages",
+      "pages": ["w1 w2 w3", "w4 w5", "", "w6 w7 w8 w9"],
+      "chunkSize": 4,
+      "overlap": 1,
+      "chunks": [
+        {
+          "text": "w1 w2 w3 w4",
+          "start": 0,
+          "end": 4,
+          "page": 1,
+          "pageEnd": 2
+        },
+        {
+          "text": "w4 w5 w6 w7",
+          "start": 3,
+          "end": 7,
+          "page": 2,
+          "pageEnd": 4
+        },
+        {
+          "text": "w7 w8 w9",
+          "start": 6,
+          "end": 9,
+          "page": 4
+        }
+      ]
+    },
+    {
+      "name": "unspaced page text",
+      "pages": ["返金は三十日", "以内 ok"],
+      "chunkSize": 4,
+      "overlap": 0,
+      "chunks": [
+        {
+          "text": "返金は三",
+          "start": 0,
+          "end": 4,
+          "page": 1
+        },
+        {
+          "text": "十日 以内",
+          "start": 4,
+          "end": 8,
+          "page": 1,
+          "pageEnd": 2
+        },
+        {
+          "text": "ok",
+          "start": 8,
+          "end": 9,
+          "page": 2
+        }
+      ]
+    },
+    {
+      "name": "markdown heading path",
+      "markdown": "Intro text here.\n# Policies\nGeneral words.\n## Refunds\nRefunds take thirty days.\n## Shipping ##\nShips fast.\n# Contact\nEmail us.",
+      "chunkSize": 4,
+      "overlap": 1,
+      "chunks": [
+        {
+          "text": "Intro text here. #",
+          "start": 0,
+          "end": 4,
+          "section": "Policies"
+        },
+        {
+          "text": "# Policies General words.",
+          "start": 3,
+          "end": 7,
+          "section": "Policies"
+        },
+        {
+          "text": "words. ## Refunds Refunds",
+          "start": 6,
+          "end": 10,
+          "section": "Policies"
+        },
+        {
+          "text": "Refunds take thirty days.",
+          "start": 9,
+          "end": 13,
+          "section": "Policies > Refunds"
+        },
+        {
+          "text": "days. ## Shipping ##",
+          "start": 12,
+          "end": 16,
+          "section": "Policies > Refunds"
+        },
+        {
+          "text": "## Ships fast. #",
+          "start": 15,
+          "end": 19,
+          "section": "Policies > Shipping"
+        },
+        {
+          "text": "# Contact Email us.",
+          "start": 18,
+          "end": 22,
+          "section": "Contact"
+        }
+      ]
+    },
+    {
+      "name": "markdown ignores headings in code fences",
+      "markdown": "# Real\nalpha beta\n```\n# not a heading\n```\n~~~\n## also not\n~~~\ngamma delta",
+      "chunkSize": 3,
+      "overlap": 0,
+      "chunks": [
+        {
+          "text": "# Real alpha",
+          "start": 0,
+          "end": 3,
+          "section": "Real"
+        },
+        {
+          "text": "beta ``` #",
+          "start": 3,
+          "end": 6,
+          "section": "Real"
+        },
+        {
+          "text": "not a heading",
+          "start": 6,
+          "end": 9,
+          "section": "Real"
+        },
+        {
+          "text": "``` ~~~ ##",
+          "start": 9,
+          "end": 12,
+          "section": "Real"
+        },
+        {
+          "text": "also not ~~~",
+          "start": 12,
+          "end": 15,
+          "section": "Real"
+        },
+        {
+          "text": "gamma delta",
+          "start": 15,
+          "end": 17,
+          "section": "Real"
+        }
+      ]
+    },
+    {
+      "name": "markdown with Windows line endings",
+      "markdown": "# One\r\nalpha beta\r\n## Two\r\ngamma delta",
+      "chunkSize": 2,
+      "overlap": 0,
+      "chunks": [
+        {
+          "text": "# One",
+          "start": 0,
+          "end": 2,
+          "section": "One"
+        },
+        {
+          "text": "alpha beta",
+          "start": 2,
+          "end": 4,
+          "section": "One"
+        },
+        {
+          "text": "## Two",
+          "start": 4,
+          "end": 6,
+          "section": "One > Two"
+        },
+        {
+          "text": "gamma delta",
+          "start": 6,
+          "end": 8,
+          "section": "One > Two"
+        }
+      ]
+    },
+    {
+      "name": "markdown heading levels and spacing",
+      "markdown": "    # indented code\n   ### Deep #\none two\n#NoSpace\n## Two\nthree four",
+      "chunkSize": 2,
+      "overlap": 0,
+      "chunks": [
+        {
+          "text": "# indented",
+          "start": 0,
+          "end": 2
+        },
+        {
+          "text": "code ###",
+          "start": 2,
+          "end": 4,
+          "section": "Deep"
+        },
+        {
+          "text": "Deep #",
+          "start": 4,
+          "end": 6,
+          "section": "Deep"
+        },
+        {
+          "text": "one two",
+          "start": 6,
+          "end": 8,
+          "section": "Deep"
+        },
+        {
+          "text": "#NoSpace ##",
+          "start": 8,
+          "end": 10,
+          "section": "Deep"
+        },
+        {
+          "text": "Two three",
+          "start": 10,
+          "end": 12,
+          "section": "Two"
+        },
+        {
+          "text": "four",
+          "start": 12,
+          "end": 13,
+          "section": "Two"
+        }
+      ]
+    }
+  ],
+  "citations": [
+    {
+      "answer": "No citations here.",
+      "cited": []
+    },
+    {
+      "answer": "Thirty days [2].",
+      "cited": [2]
+    },
+    {
+      "answer": "See [3][1] and again [3].",
+      "cited": [3, 1]
+    },
+    {
+      "answer": "Both [1, 2] apply; [1,3] too.",
+      "cited": [1, 2, 3]
+    },
+    {
+      "answer": "Out of range [0] [4] [12] are ignored; [2] is not.",
+      "cited": [2]
+    },
+    {
+      "answer": "Not citations: [a] [1.5] [ 2 ] [٣].",
+      "cited": []
+    }
+  ]
+}

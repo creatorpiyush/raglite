@@ -3,6 +3,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { RecursiveChunker } from "../../src/chunking/index.js";
+import { chunkLocation, markdownHeadings, pageStarts } from "../../src/chunking/locations.js";
+import { extractCitations } from "../../src/llm/prompt.js";
 import { type RankedList, reciprocalRankFusion } from "../../src/retrieval/fusion.js";
 import { KeywordIndex } from "../../src/retrieval/keyword-index.js";
 import { tokenize } from "../../src/text/tokenizer.js";
@@ -105,5 +107,41 @@ describe("shared fixtures: hashing", () => {
 
   it.each(fixture.namespaceFromPath)("namespaceFromPath($input)", ({ input, namespace }) => {
     expect(namespaceFromPath(input)).toBe(namespace);
+  });
+});
+
+interface LocationsFixture {
+  chunks: {
+    name: string;
+    pages?: string[];
+    markdown?: string;
+    chunkSize: number;
+    overlap: number;
+    chunks: Record<string, unknown>[];
+  }[];
+  citations: { answer: string; cited: number[] }[];
+}
+
+describe("shared fixtures: chunk locations", () => {
+  const fixture = load<LocationsFixture>("locations.json");
+
+  it.each(fixture.chunks)("$name", (c) => {
+    const text = c.pages ? c.pages.join("\n") : c.markdown!;
+    const layout = c.pages
+      ? { pageStarts: pageStarts(c.pages) }
+      : { headings: markdownHeadings(text) };
+    const spans = new RecursiveChunker(c.chunkSize, c.overlap).spans(text);
+    expect(spans.map((span) => ({ ...span, ...chunkLocation(layout, span) }))).toEqual(c.chunks);
+  });
+
+  it.each(fixture.citations)("cites $cited in $answer", ({ answer, cited }) => {
+    const context = [1, 2, 3].map((n) => ({
+      id: `c${n}`,
+      text: `passage ${n}`,
+      metadata: { source: "doc.pdf", chunk: n, totalChunks: 3, page: n },
+      score: 1,
+      distance: 0,
+    }));
+    expect(extractCitations(answer, context).map((c) => c.n)).toEqual(cited);
   });
 });
