@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.1.1] - 2026-10-10
+
+### Added
+- **Documentation site:** https://creatorpiyush.github.io/raglite/ covers both SDKs, with TypeScript and Python tabs on every sample: getting started, providers, troubleshooting, guides and an options reference. The `homepage` in `package.json` now points to it.
+
+### Changed
+- The README is now a short introduction with links to the documentation, so npm shows the docs link. Nothing was removed without a matching docs page.
+- The README no longer says collections accept glob patterns; they never expanded them. Pass a folder or a list of files.
+
 ## [2.1.0] - 2026-10-10
 
 ### Added
