@@ -1,0 +1,73 @@
+---
+title: RAGLite
+description: Semantic search, cited answers, an MCP server and agent tools over your documents, in TypeScript and Python.
+template: splash
+hero:
+  tagline: Index PDFs, Markdown, Word files, folders and web pages, then search them and get answers that cite their sources. One small library, in TypeScript and Python.
+  actions:
+    - text: Get started
+      link: /raglite/getting-started/
+      icon: right-arrow
+    - text: View on GitHub
+      link: https://github.com/creatorpiyush/raglite
+      icon: external
+      variant: minimal
+---
+
+import { Card, CardGrid, Tabs, TabItem } from "@astrojs/starlight/components";
+
+<Tabs syncKey="lang">
+<TabItem label="TypeScript">
+
+```ts
+import { Document } from "raglite-toolkit";
+
+const doc = new Document("./policy.pdf", { llm: { provider: "anthropic" } });
+await doc.build();
+
+const answer = await doc.ask("What is the refund policy?");
+console.log(answer.text, answer.citations);
+```
+
+</TabItem>
+<TabItem label="Python">
+
+```python
+from raglite import Document
+
+doc = Document("./policy.pdf", {"llm": {"provider": "anthropic"}})
+doc.build()
+
+answer = doc.ask("What is the refund policy?")
+print(answer.text, answer.citations)
+```
+
+</TabItem>
+</Tabs>
+
+<CardGrid>
+  <Card title="Answers with citations" icon="document">
+    Every answer lists the passages it used, with the PDF page and Markdown section of each.
+    [Citations](/raglite/guides/citations/)
+  </Card>
+  <Card title="Hybrid search" icon="magnifier">
+    Vector search for meaning, BM25 keyword search for exact terms such as error codes, or both
+    fused. [Hybrid search](/raglite/guides/hybrid-search/)
+  </Card>
+  <Card title="MCP server and agent tools" icon="puzzle">
+    Give Claude Code, Cursor or VS Code your documents with one command, or hand a search tool to
+    your own agent. [MCP server](/raglite/guides/mcp/)
+  </Card>
+  <Card title="Any provider" icon="random">
+    OpenAI, Anthropic, Google, Mistral, Cohere, Groq, xAI and Ollama. Install only the SDKs you
+    use. [Providers](/raglite/providers/)
+  </Card>
+  <Card title="Fully local" icon="laptop">
+    Local embeddings and Ollama answers: no API key, nothing leaves your machine.
+    [Getting started](/raglite/getting-started/)
+  </Card>
+  <Card title="Two SDKs that match" icon="seti:json">
+    The TypeScript and Python packages have the same features, options, tools and REST API, and
+    shared test fixtures keep them in step.
+  </Card>
+</CardGrid>

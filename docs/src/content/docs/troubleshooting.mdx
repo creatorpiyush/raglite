@@ -1,0 +1,95 @@
+---
+title: Troubleshooting
+description: Common errors and warnings, what causes them and how to fix them.
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+## "requires the … package" (`ConfigError`)
+
+Provider SDKs are optional, so RAGLite installs only what you use. The error names the command to run:
+
+<Tabs syncKey="lang">
+<TabItem label="TypeScript">
+
+```text
+ConfigError: The "anthropic" LLM provider requires the '@ai-sdk/anthropic' package. Install it with: npm install @ai-sdk/anthropic
+```
+
+</TabItem>
+<TabItem label="Python">
+
+```text
+ConfigError: The "anthropic" LLM provider requires the raglite-toolkit[anthropic] extra. Install it with: pip install 'raglite-toolkit[anthropic]'
+```
+
+</TabItem>
+</Tabs>
+
+The default embeddings are `local`, so a first run without an `embeddings` option needs `@huggingface/transformers` (TypeScript) or the `[local]` extra (Python). [Choosing providers](/raglite/providers/) lists the package for each provider.
+
+## "No RagLite index found … Call build() first"
+
+`search()` and `ask()` on a `Document` need an index. Call `build()` once; later runs load the saved index. If you did build, check that `storeDir` is the same in both places: the default `./.raglite` is relative to the current directory.
+
+## "No LLM provider configured"
+
+`ask()` needs an LLM. Set `llm` on the document, or pass one to `ask()`. `search()` works without one.
+
+## An index built with a shut-down embedding model
+
+Google shut down `text-embedding-004` and `embedding-001`. An index built with one of them cannot embed new queries, so:
+
+- `build()` re-embeds it with the current default model and logs a warning, unless you explicitly ask for the old model.
+- `search()` and `ask()` without a `build()` throw an error that says to call `build()`.
+
+## "No keyword index for …; using vector search"
+
+Keyword and hybrid search need a keyword index, which `build()` saves next to the vectors. Indexes built before version 1.3 have none. The memory, Qdrant and (TypeScript) LanceDB stores rebuild it from the stored chunks on the first keyword search; other stores fall back to vector search until you rebuild:
+
+<Tabs syncKey="lang">
+<TabItem label="TypeScript">
+
+```ts
+await doc.build({ rebuild: true });
+```
+
+</TabItem>
+<TabItem label="Python">
+
+```python
+doc.build(rebuild=True)
+```
+
+</TabItem>
+</Tabs>
+
+With Qdrant or Pinecone, keep `storeDir` on persistent disk: the keyword index lives there, not in the database.
+
+## The MCP server times out on first start
+
+The first start indexes the documents and, with `npx`, installs the packages. That can take longer than an MCP client waits. Run the same command once in a terminal, wait until it is ready, then stop it with Ctrl+C. Later starts reuse the index. See [MCP server](/raglite/guides/mcp/).
+
+## "Loader returned empty text" for a PDF
+
+The PDF has no text layer: it is a scanned image. RAGLite does not run OCR. Convert it with an OCR tool (for example `ocrmypdf`) and index the result.
+
+## "overlap must be smaller than chunkSize"
+
+`overlap` is counted in the same units as `chunkSize`. Lower `overlap` or raise `chunkSize`.
+
+## Chinese, Japanese or Thai chunks look short
+
+For text without spaces between words, `chunkSize` and `overlap` count characters, not words. A 500-character Chinese chunk holds far less than 500 English words. Raise `chunkSize` if answers miss context.
+
+## Answers say "I could not find the answer in the provided documents"
+
+The LLM only sees the retrieved passages. Try:
+
+- `search()` with the same question, to see what was retrieved.
+- A higher `topK`.
+- `mode: "hybrid"` for exact terms such as codes or names. See [Hybrid search](/raglite/guides/hybrid-search/).
+
+## Logs
+
+`logLevel` is `info` by default. Set `"debug"` for more detail or `"silent"` for none. Both SDKs write logs to stderr, so stdout stays clean for the CLI's JSON output and the MCP protocol.

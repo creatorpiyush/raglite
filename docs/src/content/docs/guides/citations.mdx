@@ -1,0 +1,96 @@
+---
+title: Citations
+description: Which passages an answer used, with the PDF page and Markdown section of each.
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+`ask()` numbers the retrieved passages for the LLM and asks it to cite them as `[1]`, `[2]`, and so on. The answer's `citations` list the passages it actually cited.
+
+<Tabs syncKey="lang">
+<TabItem label="TypeScript">
+
+```ts
+const answer = await doc.ask("What is the refund policy?");
+
+answer.text;
+// "Refunds are issued within 30 days [1]. Opened items are excluded [2]."
+
+answer.citations;
+// [
+//   { n: 1, source: "policy.pdf", chunk: 4, page: 12, text: "..." },
+//   { n: 2, source: "policy.pdf", chunk: 9, page: 14, pageEnd: 15, text: "..." },
+// ]
+```
+
+</TabItem>
+<TabItem label="Python">
+
+```python
+answer = doc.ask("What is the refund policy?")
+
+answer.text
+# "Refunds are issued within 30 days [1]. Opened items are excluded [2]."
+
+answer.citations
+# [Citation(n=1, source="policy.pdf", chunk=4, page=12, text="..."),
+#  Citation(n=2, source="policy.pdf", chunk=9, page=14, pageEnd=15, text="...")]
+```
+
+</TabItem>
+</Tabs>
+
+## Citation fields
+
+| Field | Meaning |
+| --- | --- |
+| `n` | The number used in the answer: `2` for `[2]` |
+| `source` | File name, URL or `fromText` id |
+| `chunk` | Chunk number in that source, from 1 |
+| `page` | First page of the passage (PDF only) |
+| `pageEnd` | Last page, only when the passage crosses a page break |
+| `section` | Heading path, such as `"Policies > Refunds"` (Markdown only) |
+| `text` | The passage itself |
+
+Citations are listed in the order they first appear in the answer. Fields that do not apply are left out.
+
+## How citations are read from the answer
+
+- `[2]`, `[1][3]` and `[1, 3]` are all recognised.
+- A number that matches no passage is ignored.
+- A passage cited twice is listed once.
+
+`includeCitations: false` in the ask options drops the instruction to cite and the source labels next to each passage. Most answers then have no numbers, so `citations` is usually empty.
+
+## Pages and sections in search results
+
+Search results carry the same location in `metadata`: `page`, `pageEnd` and `section`. Use them to link to the right page of a PDF or the right heading of a Markdown file.
+
+- **PDF:** pages are counted from 1.
+- **Markdown:** `section` is the heading in effect where the chunk starts, with its parent headings, such as `Setup > Linux > Troubleshooting`. Headings inside fenced code blocks are ignored.
+
+## Older indexes
+
+Indexes built before version 2.1 have no pages or sections. Answers still get `citations`, without those fields. Rebuild to add them:
+
+<Tabs syncKey="lang">
+<TabItem label="TypeScript">
+
+```ts
+await doc.build({ rebuild: true });
+```
+
+</TabItem>
+<TabItem label="Python">
+
+```python
+doc.build(rebuild=True)
+```
+
+</TabItem>
+</Tabs>
+
+## REST API and CLI
+
+- The REST `/ask` response includes `citations`. See [REST API](/raglite/guides/rest-api/).
+- `raglite ask` prints the answer, then a `Sources:` list with each citation's source, page and section.

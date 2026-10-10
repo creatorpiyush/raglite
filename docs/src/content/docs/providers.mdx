@@ -1,0 +1,135 @@
+---
+title: Choosing providers
+description: Embedding and LLM providers, the package or extra each needs, API keys and running fully local.
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+RAGLite uses two kinds of model:
+
+- An **embedding model** turns chunks and queries into vectors for search. Set it with `embeddings`. The default is `local`, which runs on your machine with no API key.
+- An **LLM** writes the answers for `ask()`. Set it with `llm`. Search works without one.
+
+Each provider needs its SDK installed: an npm package for TypeScript, an extra for Python.
+
+## LLMs
+
+| Provider | `provider` | Default model | npm package | pip extra |
+| --- | --- | --- | --- | --- |
+| OpenAI | `openai` | `gpt-4o-mini` | `@ai-sdk/openai` | `[openai]` |
+| Anthropic | `anthropic` | `claude-sonnet-5-5` | `@ai-sdk/anthropic` | `[anthropic]` |
+| Google | `google` | `gemini-3.8-flash` | `@ai-sdk/google` | `[google]` |
+| Mistral | `mistral` | `mistral-large-latest` | `@ai-sdk/mistral` | `[mistral]` |
+| Cohere | `cohere` | `command-a-03-2025` | `@ai-sdk/cohere` | `[cohere]` |
+| Groq | `groq` | `openai/gpt-oss-120b` | `@ai-sdk/groq` | `[groq]` |
+| xAI (Grok) | `xai` | `grok-4.7` | `@ai-sdk/xai` | `[xai]` |
+| Ollama | `ollama` | `llama3.2` | `ollama-ai-provider-v2` | `[ollama]` |
+
+Set `model` to use another model from the same provider. Answers use temperature 0 by default. Anthropic requests send no `temperature` unless you set one, because Claude 5 models reject non-default sampling values.
+
+## Embeddings
+
+| Provider | `provider` | Default model | npm package | pip extra |
+| --- | --- | --- | --- | --- |
+| Local | `local` | `Xenova/all-MiniLM-L6-v2` (TypeScript), `all-MiniLM-L6-v2` (Python) | `@huggingface/transformers` | `[local]` |
+| OpenAI | `openai` | `text-embedding-3-small` | `@ai-sdk/openai` | `[openai]` |
+| Google | `google` | `gemini-embedding-2` | `@ai-sdk/google` | `[google]` |
+| Mistral | `mistral` | `mistral-embed` | `@ai-sdk/mistral` | `[mistral]` |
+| Cohere | `cohere` | `embed-english-v3.0` | `@ai-sdk/cohere` | `[cohere]` |
+| Voyage | `voyage` | `voyage-3` | `voyage-ai-provider` | `[voyage]` |
+| Ollama | `ollama` | `nomic-embed-text` | `ollama-ai-provider-v2` | `[ollama]` |
+
+Changing the embedding provider or model re-embeds the document on the next `build()`, because vectors from different models cannot be compared. When you leave `embeddings` unset, an existing index keeps the model it was built with.
+
+## API keys
+
+Pass `apiKey` in the provider config, or leave it out and set the provider's environment variable:
+
+| Provider | TypeScript | Python |
+| --- | --- | --- |
+| OpenAI | `OPENAI_API_KEY` | `OPENAI_API_KEY` |
+| Anthropic | `ANTHROPIC_API_KEY` | `ANTHROPIC_API_KEY` |
+| Google | `GOOGLE_GENERATIVE_AI_API_KEY` | `GEMINI_API_KEY` or `GOOGLE_API_KEY` |
+| Mistral | `MISTRAL_API_KEY` | `MISTRAL_API_KEY` |
+| Cohere | `COHERE_API_KEY` | `COHERE_API_KEY` |
+| Groq | `GROQ_API_KEY` | `GROQ_API_KEY` |
+| xAI | `XAI_API_KEY` | `XAI_API_KEY` |
+| Voyage | `VOYAGE_API_KEY` | `VOYAGE_API_KEY` |
+
+Ollama needs no key. `baseURL` points any provider at another endpoint, such as a proxy or a remote Ollama server.
+
+## Choosing the LLM per call
+
+The `llm` passed to `ask()` overrides the one set on the document:
+
+<Tabs syncKey="lang">
+<TabItem label="TypeScript">
+
+```ts
+const claude = await doc.ask("Summarize this document", {
+  llm: { provider: "anthropic", model: "claude-sonnet-5-5" },
+});
+
+const gemini = await doc.ask("Summarize this document", {
+  llm: { provider: "google", model: "gemini-3.8-flash", maxTokens: 500 },
+});
+```
+
+</TabItem>
+<TabItem label="Python">
+
+```python
+claude = doc.ask("Summarize this document", {
+    "llm": {"provider": "anthropic", "model": "claude-sonnet-5-5"},
+})
+
+gemini = doc.ask("Summarize this document", {
+    "llm": {"provider": "google", "model": "gemini-3.8-flash", "maxTokens": 500},
+})
+```
+
+</TabItem>
+</Tabs>
+
+LLM options: `provider`, `model`, `apiKey`, `baseURL`, `temperature` and `maxTokens`.
+
+## Fully local
+
+Local embeddings and an Ollama LLM need no API key and send nothing off your machine. Start [Ollama](https://ollama.com) and pull a model first (`ollama pull llama3.2`).
+
+<Tabs syncKey="lang">
+<TabItem label="TypeScript">
+
+```bash
+npm install raglite-toolkit @huggingface/transformers ollama-ai-provider-v2
+```
+
+```ts
+const doc = new Document("./manual.pdf", {
+  embeddings: { provider: "local" },
+  llm: { provider: "ollama", model: "llama3.2" },
+});
+await doc.build();
+console.log((await doc.ask("How do I reset the device?")).text);
+```
+
+</TabItem>
+<TabItem label="Python">
+
+```bash
+pip install 'raglite-toolkit[local,ollama]'
+```
+
+```python
+doc = Document("./manual.pdf", {
+    "embeddings": {"provider": "local"},
+    "llm": {"provider": "ollama", "model": "llama3.2"},
+})
+doc.build()
+print(doc.ask("How do I reset the device?").text)
+```
+
+</TabItem>
+</Tabs>
+
+Ollama can also embed: `embeddings: { provider: "ollama", model: "nomic-embed-text" }`.

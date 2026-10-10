@@ -1,0 +1,88 @@
+---
+title: Collections
+description: Index folders, files and web pages together, and search or ask across all of them.
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+A `DocumentCollection` indexes many sources and searches them as one. Each source is a file, a folder (scanned recursively) or a web URL.
+
+<Tabs syncKey="lang">
+<TabItem label="TypeScript">
+
+```ts
+import { DocumentCollection } from "raglite-toolkit";
+
+const collection = new DocumentCollection(["./docs", "./faq.md", "https://example.com/pricing"], {
+  llm: { provider: "openai" },
+});
+collection.addSource("./handbook.pdf");
+
+const result = await collection.build();
+console.log(`${result.totalDocuments} documents, ${result.totalChunks} chunks`);
+
+const hits = await collection.search("refund policy", { topK: 5 });
+const answer = await collection.ask("What is the refund policy?");
+```
+
+</TabItem>
+<TabItem label="Python">
+
+```python
+from raglite import DocumentCollection
+
+collection = DocumentCollection(["./docs", "./faq.md", "https://example.com/pricing"], {
+    "llm": {"provider": "openai"},
+})
+collection.add_source("./handbook.pdf")
+
+result = collection.build()
+print(f"{result.totalDocuments} documents, {result.totalChunks} chunks")
+
+hits = collection.search("refund policy", top_k=5)
+answer = collection.ask("What is the refund policy?")
+```
+
+</TabItem>
+</Tabs>
+
+Each file gets its own index, so `build()` re-embeds only the files that changed. Search results from every document are merged by score; in hybrid mode the lists are merged first, then fused once.
+
+## Folders
+
+A folder is scanned recursively for supported files (PDF, DOCX, Markdown, TXT, JSON).
+
+- Unsupported and empty files are skipped and reported in `errors`.
+- The TypeScript SDK skips hidden folders (such as `.git` and `.raglite`) and `node_modules`.
+
+:::caution[Python]
+The Python SDK does not skip hidden folders yet. Keep `storeDir` and virtual environments outside the folder you index, or their files are indexed too.
+:::
+
+Glob patterns such as `./docs/*.md` are not expanded. Pass a folder, or a list of files.
+
+## The build result
+
+| Field | Meaning |
+| --- | --- |
+| `totalDocuments` | Documents in the collection |
+| `totalChunks` | Chunks across all documents |
+| `cachedDocuments` | Documents whose saved index was reused |
+| `newDocuments` | Documents indexed in this build |
+| `errors` | `{ source, error }` for each source that failed |
+
+One broken file does not stop the build: it is reported in `errors` and the rest are indexed. A search fails only when every document fails.
+
+## Vector stores
+
+Collections work with every [vector store](/raglite/guides/vector-stores/). Pass a provider config such as `{ provider: "qdrant", ... }`, not a `VectorStore` instance: an instance has one namespace, and every document would overwrite the others. RAGLite throws a `ConfigError` if you try.
+
+## Other methods
+
+| TypeScript | Python | Does |
+| --- | --- | --- |
+| `askStream()` | `ask_stream()` | Streams the answer. See [Streaming](/raglite/guides/streaming/) |
+| `asTool()` | `as_tool()` | A search tool for agents. See [Agent tools](/raglite/guides/agent-tools/) |
+| `serve()` | `serve()` | A REST API. See [REST API](/raglite/guides/rest-api/) |
+| `getDocuments()` | `get_documents()` | The `Document` for each source |
+| `chunkCount` | `chunk_count` | Chunks across all documents |

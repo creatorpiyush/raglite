@@ -1,0 +1,120 @@
+---
+title: CLI
+description: Index, search, ask, serve and run the MCP server from the command line.
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+Both packages install a `raglite` command with the same commands and flags.
+
+<Tabs syncKey="lang">
+<TabItem label="TypeScript">
+
+```bash
+npm install -g raglite-toolkit @huggingface/transformers
+# or run without installing:
+npx -y -p raglite-toolkit -p @huggingface/transformers raglite --help
+```
+
+</TabItem>
+<TabItem label="Python">
+
+```bash
+pip install 'raglite-toolkit[local]'
+raglite --help
+```
+
+</TabItem>
+</Tabs>
+
+Every command takes a `<path|url>`: a file, a folder (indexed as a [collection](/raglite/guides/collections/)) or a web URL. The index is reused between commands, so `search` after `index` embeds only the query.
+
+```bash
+raglite index ./docs
+raglite search ./docs "refund policy" --top-k 3
+raglite search ./docs "ERR_4021" --mode hybrid
+raglite ask ./docs "What is the refund policy?" --llm-provider anthropic --stream
+raglite serve ./docs --llm-provider openai --port 8085 --token "$RAGLITE_TOKEN"
+raglite mcp ./docs --store-dir "$PWD/.raglite"
+```
+
+## Commands
+
+### index
+
+Builds or reuses the index and prints the build result as JSON.
+
+| Flag | Meaning |
+| --- | --- |
+| `--chunk-size N` | Words per chunk (characters for Chinese, Japanese, Thai, ...) |
+| `--overlap N` | Overlap between chunks |
+| `--rebuild` | Re-index even if nothing changed |
+
+### search
+
+`raglite search <path|url> "query"` prints the results as JSON.
+
+| Flag | Meaning |
+| --- | --- |
+| `--top-k N` | Number of results |
+| `--mode M` | `vector`, `keyword` or `hybrid` |
+
+### ask
+
+`raglite ask <path|url> "question"` prints the answer, then a `Sources:` list of the cited passages with page and section.
+
+| Flag | Meaning |
+| --- | --- |
+| `--llm-provider P` | Required. `openai`, `anthropic`, `google`, `mistral`, `cohere`, `groq`, `xai`, `ollama` |
+| `--llm-model M` | Model; default from [Choosing providers](/raglite/providers/) |
+| `--llm-key K` | API key; default from the provider's environment variable |
+| `--top-k N` | Passages given to the LLM |
+| `--mode M` | Retrieval mode |
+| `--stream` | Print the answer as it is written (no `Sources:` list) |
+
+### serve
+
+Starts the [REST API](/raglite/guides/rest-api/) and runs until stopped.
+
+| Flag | Meaning |
+| --- | --- |
+| `--llm-provider P`, `--llm-model M`, `--llm-key K` | LLM for `/ask`; without one, `/ask` returns 503 |
+| `--host H` | Default `127.0.0.1` |
+| `--port N` | Default `8085` |
+| `--token T` | Bearer token required on every endpoint except `/health` |
+| `--mode M` | Default retrieval mode |
+
+### mcp
+
+Serves the [MCP server](/raglite/guides/mcp/) over stdio. Takes `--llm-provider`, `--llm-model` and `--llm-key` (which add the `ask` tool) and `--mode`. The TypeScript package needs `@modelcontextprotocol/sdk`; the Python package needs the `[mcp]` extra.
+
+## Flags on every command
+
+| Flag | Meaning |
+| --- | --- |
+| `--store-dir D` | Where indexes are kept (default `./.raglite`) |
+| `--embed-provider P` | Embedding provider; default: the existing index's, or `local` for a new one |
+| `--embed-model M` | Embedding model |
+| `--embed-key K` | Embedding API key |
+
+Use the same `--store-dir` and embedding flags for every command on the same index.
+
+### Vector store flags (TypeScript only)
+
+| Flag | Meaning |
+| --- | --- |
+| `--vector-provider P` | `memory`, `qdrant`, `pinecone` or `lancedb` |
+| `--vector-url U` | Qdrant URL or Pinecone index host |
+| `--vector-key K` | API key for the store |
+| `--vector-index I` | Shared Qdrant collection name |
+| `--vector-store-dir D` | Folder for the memory and LanceDB stores |
+
+## Output and scripting
+
+Results go to stdout and logs to stderr, so JSON output can be piped:
+
+```bash
+raglite search ./docs "refund policy" --top-k 3 | jq -r '.[] | "\(.score)  \(.metadata.source)"'
+```
+
+`raglite --version` prints the version.

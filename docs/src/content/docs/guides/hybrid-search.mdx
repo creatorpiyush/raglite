@@ -1,0 +1,86 @@
+---
+title: Hybrid search
+description: Vector, keyword (BM25) and hybrid retrieval, and when to use each.
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+Vector search matches meaning, but it can miss exact terms such as error codes, SKUs, function names or rare product names. Keyword search (BM25) finds those exactly. Hybrid runs both and merges the results with Reciprocal Rank Fusion.
+
+| Mode | Finds | Use for |
+| --- | --- | --- |
+| `vector` (default) | Passages with similar meaning | Questions in natural language |
+| `keyword` | Passages containing the query's terms | Codes, IDs, names |
+| `hybrid` | Both, fused | Mixed questions, such as "what does ERR_4021 mean?" |
+
+<Tabs syncKey="lang">
+<TabItem label="TypeScript">
+
+```ts
+await doc.search("ERR_4021", { mode: "hybrid" });
+await doc.ask("What does ERR_4021 mean?", { mode: "hybrid" });
+
+// Or set a default once; it applies to search(), ask() and askStream().
+new Document("./runbook.md", {
+  retrieval: {
+    mode: "hybrid",
+    hybrid: { rrfK: 60, candidates: 50, weights: { vector: 1, keyword: 1 } },
+  },
+});
+```
+
+</TabItem>
+<TabItem label="Python">
+
+```python
+doc.search("ERR_4021", mode="hybrid")
+doc.ask("What does ERR_4021 mean?", {"mode": "hybrid"})
+
+# Or set a default once; it applies to search(), ask() and ask_stream().
+Document("./runbook.md", {
+    "retrieval": {
+        "mode": "hybrid",
+        "hybrid": {"rrfK": 60, "candidates": 50, "weights": {"vector": 1, "keyword": 1}},
+    },
+})
+```
+
+</TabItem>
+</Tabs>
+
+## Hybrid options
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `rrfK` | `60` | RRF constant. Larger values flatten the difference between ranks |
+| `candidates` | `max(50, topK × 4)` | Results taken from each retriever before fusion |
+| `weights` | `{ vector: 1, keyword: 1 }` | Relative weight of each retriever |
+
+## Scores
+
+- In `vector` mode, `score` is the cosine similarity.
+- In `keyword` and `hybrid` modes, `score` is the fused rank score scaled to 0..1: 1 means ranked first by every retriever. Each result also has `scores` with `vector` (cosine), `keyword` (BM25) and `fused` (raw RRF), where they apply.
+- `scoreThreshold` is always a cosine similarity. In hybrid mode it filters the vector results before fusion; keyword matches are not filtered by it.
+
+## The keyword index
+
+`build()` creates the keyword index from the chunk texts, with no extra embedding calls, and saves it as `<storeDir>/<namespace>/keyword.json`. It works with every vector store. With Qdrant or Pinecone, keep `storeDir` on persistent disk.
+
+Indexes built before version 1.3 have no keyword index. See [Troubleshooting](/raglite/troubleshooting/#no-keyword-index-for--using-vector-search).
+
+## Tokenizer
+
+The tokenizer is the same in both SDKs:
+
+| Text | How it is indexed |
+| --- | --- |
+| Latin, Cyrillic, Greek, Arabic, Devanagari and other spaced scripts | Words, lowercased and NFKC-normalised (`ﬁ` → `fi`, `ＡＢＣ` → `abc`) |
+| Code identifiers | `gpt-4.1`, `snake_case` and `ERR_42` stay whole, and their parts are indexed too |
+| Chinese, Japanese, Korean, Thai, Lao, Khmer, Myanmar | Overlapping character pairs (`退款处理` → `退款`, `款处`, `处理`), so no dictionary is needed |
+
+There is no stemming or stopword list, because both are language-specific: in keyword mode `refund` does not match `refunds`. Hybrid mode's vector side covers those cases.
+
+## REST API and CLI
+
+- REST: `"mode"` in the `/search` and `/ask` request body.
+- CLI: `--mode vector|keyword|hybrid` on `search`, `ask`, `serve` and `mcp`.

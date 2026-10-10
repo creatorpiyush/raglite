@@ -1,0 +1,122 @@
+---
+title: Getting started
+description: Install RAGLite, index a document, then search it and ask questions.
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+RAGLite turns documents into a searchable index, then answers questions from it with any LLM. The TypeScript package needs Node.js 20 or later; the Python package needs Python 3.11 or later.
+
+## Install
+
+The core package is small. Add the SDK for each provider you use; [Choosing providers](/raglite/providers/) lists them all.
+
+<Tabs syncKey="lang">
+<TabItem label="TypeScript">
+
+```bash
+npm install raglite-toolkit
+npm install @huggingface/transformers   # local embeddings (the default), no API key
+npm install @ai-sdk/anthropic           # Claude answers
+```
+
+</TabItem>
+<TabItem label="Python">
+
+```bash
+pip install 'raglite-toolkit[local,anthropic]'   # local embeddings (the default) + Claude answers
+pip install 'raglite-toolkit[all]'               # every provider
+```
+
+The `local` extra installs `sentence-transformers` with PyTorch. The `all-MiniLM-L6-v2` model (about 90 MB) is downloaded on first use.
+
+</TabItem>
+</Tabs>
+
+If a package is missing, RAGLite throws a `ConfigError` that names the command to run.
+
+## Build, search, ask
+
+<Tabs syncKey="lang">
+<TabItem label="TypeScript">
+
+```ts
+import { Document } from "raglite-toolkit";
+
+const doc = new Document("./policy.pdf", {
+  llm: { provider: "anthropic", apiKey: process.env.ANTHROPIC_API_KEY },
+});
+
+await doc.build(); // load → chunk → embed → save
+
+const hits = await doc.search("refund policy", { topK: 3 });
+for (const hit of hits) console.log(hit.score.toFixed(2), hit.metadata.source, hit.text);
+
+const answer = await doc.ask("What is the refund policy?");
+console.log(answer.text); // "Refunds are issued within 30 days [1]."
+console.log(answer.citations); // the passages behind [1], [2], ...
+```
+
+</TabItem>
+<TabItem label="Python">
+
+```python
+import os
+from raglite import Document
+
+doc = Document("./policy.pdf", {
+    "llm": {"provider": "anthropic", "apiKey": os.environ["ANTHROPIC_API_KEY"]},
+})
+
+doc.build()  # load → chunk → embed → save
+
+hits = doc.search("refund policy", top_k=3)
+for hit in hits:
+    print(round(hit.score, 2), hit.metadata.source, hit.text)
+
+answer = doc.ask("What is the refund policy?")
+print(answer.text)       # "Refunds are issued within 30 days [1]."
+print(answer.citations)  # the passages behind [1], [2], ...
+```
+
+</TabItem>
+</Tabs>
+
+- `build()` reuses the saved index when nothing has changed, so calling it on every start is cheap. See [How caching works](/raglite/guides/caching/).
+- A `Document` that was never built throws `FileNotIndexedError` from `search()` and `ask()`. A saved index from an earlier run is loaded without calling `build()`.
+- Without an `apiKey`, each provider reads its usual environment variable, such as `ANTHROPIC_API_KEY`. See [Choosing providers](/raglite/providers/#api-keys).
+
+Supported files: PDF, DOCX, Markdown, TXT and JSON, plus web pages by URL. To index many files at once, see [Collections](/raglite/guides/collections/).
+
+## Index text you already have
+
+No file needed: index a database row, an upload or CMS content. The `id` names the index (reuse it to reuse the index) and becomes each chunk's `source`. Changed text is re-indexed on the next `build()`.
+
+<Tabs syncKey="lang">
+<TabItem label="TypeScript">
+
+```ts
+const doc = Document.fromText("faq-42", faqText, { embeddings: { provider: "openai" } });
+await doc.build();
+```
+
+</TabItem>
+<TabItem label="Python">
+
+```python
+doc = Document.from_text("faq-42", faq_text, {"embeddings": {"provider": "openai"}})
+doc.build()
+```
+
+</TabItem>
+</Tabs>
+
+## Where the index is stored
+
+Indexes are saved under `./.raglite`, one folder per document, so two documents never overwrite each other. Set `storeDir` to keep them elsewhere, or use a [vector database](/raglite/guides/vector-stores/). Add `.raglite/` to your `.gitignore`.
+
+## Next steps
+
+- [Choosing providers](/raglite/providers/): embeddings and LLMs, API keys, running fully local.
+- [Citations](/raglite/guides/citations/): pages and sections for each cited passage.
+- [MCP server](/raglite/guides/mcp/): give your documents to Claude Code, Cursor or VS Code.
