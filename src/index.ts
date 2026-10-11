@@ -47,6 +47,14 @@ export {
   VectorDBError,
 } from "./errors.js";
 export type {
+  EvalExpected,
+  EvalOptions,
+  EvalQuestion,
+  EvalReport,
+  EvalRow,
+} from "./eval.js";
+export { evaluate, formatReport, parseQuestions } from "./eval.js";
+export type {
   AnswerResult,
   Citation,
   GenerateAnswerOptions,
