@@ -60,10 +60,12 @@ The server listens on `127.0.0.1` by default. Set a bearer token before binding 
 | --- | --- | --- | --- | --- |
 | `GET` | `/health` | No | — | `{ status, version, chunks, namespace? }` |
 | `GET` | `/info` | Yes | — | Chunk size, overlap, `topK`, retrieval mode, embedding provider and model, LLM provider, chunk count |
-| `POST` | `/search` | Yes | `{ query, topK?, scoreThreshold?, mode? }` | `{ results: SearchResult[] }` |
-| `POST` | `/ask` | Yes | `{ question, topK?, scoreThreshold?, mode?, includeCitations?, stream? }` | An `AnswerResult` with `citations`, or plain text when `stream` is `true` |
+| `POST` | `/search` | Yes | `{ query, topK?, scoreThreshold?, mode?, filter? }` | `{ results: SearchResult[] }` |
+| `POST` | `/ask` | Yes | `{ question, topK?, scoreThreshold?, mode?, filter?, includeCitations?, stream? }` | An `AnswerResult` with `citations`, or plain text when `stream` is `true` |
 
 - `topK` is 1 to 50. `mode` is `vector`, `keyword` or `hybrid`.
+- `filter` is a [metadata filter](/raglite/guides/filters/), such as `{ "page": { "gte": 3 } }`. An invalid one gets `400` with `{ "error": "ConfigError", "message": ... }`.
+- A `rerank` default set on the document or collection applies to both endpoints.
 - With a bearer token set, send `Authorization: Bearer <token>`. A missing or wrong token gets `401`.
 - An invalid body gets `400` with `{ "error": "ValidationError", "details": ... }`.
 

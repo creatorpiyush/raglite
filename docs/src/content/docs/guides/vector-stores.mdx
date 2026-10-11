@@ -109,6 +109,10 @@ An embedded database on the local filesystem, in `<storeDir>/lancedb`.
 new Document("./policy.pdf", { vectorStore: { provider: "lancedb", storeDir: ".raglite" } });
 ```
 
+:::caution[Before 2.2.0]
+Searching a LanceDB store failed with `table.search is not a function` in every release before 2.2.0. Upgrade, then rebuild LanceDB indexes with `build({ rebuild: true })`.
+:::
+
 ## The keyword index with remote stores
 
 [Hybrid search](/raglite/guides/hybrid-search/) keeps its keyword index under `storeDir`, even with Qdrant or Pinecone. Keep `storeDir` on persistent disk, or the keyword index is lost on restart and keyword search falls back to vector search until you rebuild.
@@ -155,5 +159,7 @@ Document("./policy.pdf", {"vectorStore": MyStore()})
 
 </TabItem>
 </Tabs>
+
+`search` receives a third argument, `filter`, holding the [metadata filter](/raglite/guides/filters/) conditions on per-chunk fields (`chunk`, `totalChunks`, `page`, `pageEnd`, `section`). Apply it before the `topK` cut; `matchesFilter(metadata, filter)` (`matches_filter` in Python) checks one chunk. A store that ignores it still returns correct results, because RAGLite filters the results again, but a filtered search may then return fewer than `topK`. `keywordSearch` takes the same argument.
 
 To extend a built-in store, import `MemoryVectorStore`, `QdrantVectorStore`, `PineconeVectorStore` or `LanceDbVectorStore` from `raglite-toolkit`, or the first three from `raglite.vectordb` in Python.

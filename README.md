@@ -14,6 +14,7 @@ RAGLite indexes PDFs, Word files, Markdown, text, JSON, folders and web pages, t
 
 - **Answers with citations**, including the PDF page and Markdown section of each passage
 - **Hybrid search**: vector search for meaning, BM25 for exact terms such as error codes, or both
+- **Metadata filters and reranking**, and `raglite eval` to measure retrieval on your own questions
 - **MCP server** for Claude Code, Claude Desktop, Cursor and VS Code, and an **AI SDK tool** for your own agents
 - **Any provider**: OpenAI, Anthropic, Google, Mistral, Cohere, Groq, xAI and Ollama; install only what you use
 - **Fully local** option: local embeddings and Ollama, no API key
@@ -52,6 +53,9 @@ console.log(answer.citations); // [{ n: 1, source: "policy.pdf", page: 12, text:
 - [Collections](https://creatorpiyush.github.io/raglite/guides/collections/): index folders, files and URLs together
 - [Citations](https://creatorpiyush.github.io/raglite/guides/citations/): pages and sections for each cited passage
 - [Hybrid search](https://creatorpiyush.github.io/raglite/guides/hybrid-search/): vector, keyword and hybrid retrieval
+- [Metadata filters](https://creatorpiyush.github.io/raglite/guides/filters/): search one customer's documents or a range of pages
+- [Reranking](https://creatorpiyush.github.io/raglite/guides/reranking/): Cohere, Voyage, an LLM or your own function
+- [Evaluating retrieval](https://creatorpiyush.github.io/raglite/guides/evaluation/): `raglite eval` scores recall@k, MRR and hit rate on your questions
 - [MCP server](https://creatorpiyush.github.io/raglite/guides/mcp/): give your documents to AI coding tools
 - [Agent tools](https://creatorpiyush.github.io/raglite/guides/agent-tools/): `asTool()` for the Vercel AI SDK
 - [Streaming, progress and cancellation](https://creatorpiyush.github.io/raglite/guides/streaming/)

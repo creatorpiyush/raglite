@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.2.0] - 2026-10-11
+
+### Added
+- **Metadata filters:** `search()`, `ask()`, `askStream()` and the REST `/search` and `/ask` endpoints take `filter`, such as `{ source: "policy.pdf", page: { gte: 3 } }`. A plain value means equality; `in`, `gt`, `gte`, `lt` and `lte` are the operators, and every field must match. Chunk fields are filtered inside the store before the `topK` cut: in memory, in the keyword index, as Qdrant and Pinecone payload filters, and as LanceDB `where` clauses. See [Metadata filters](https://creatorpiyush.github.io/raglite/guides/filters/).
+- **Custom metadata:** the `metadata` option, such as `{ tenant: "acme" }`, adds your own fields to every search result and makes them filterable. Changing it needs no rebuild.
+- **Reranking:** `rerank: { provider: "cohere" | "voyage" | "llm" }` or your own function reorders `candidates` results (default 30) before the `topK` cut. Cohere and Voyage are called through the AI SDK's `rerank()`. `score` becomes the reranker's score and `scores.rerank` records it. If the reranker fails, a warning is logged and the retrieval order is kept. Off by default; set a default with the `rerank` option and turn it off per call with `rerank: false`. See [Reranking](https://creatorpiyush.github.io/raglite/guides/reranking/).
+- **`raglite eval <path> questions.jsonl`** reports recall@k, MRR and hit rate for each retrieval mode side by side, plus each mode reranked with `--rerank`, and `--json` for CI. Also `evaluate()`, `parseQuestions()` and `formatReport()` from code. See [Evaluating retrieval](https://creatorpiyush.github.io/raglite/guides/evaluation/).
+- `matchesFilter()` and `DEFAULT_RERANK_MODELS` are exported.
+
+### Changed
+- `VectorStore.search()` and `keywordSearch()` take an optional third argument, `filter`. Custom stores need no change: RAGLite filters their results again, though a filtered search may then return fewer than `topK`.
+
+### Fixed
+- **The LanceDB store works.** Every search failed with `table.search is not a function` on `@lancedb/lancedb` 0.4. It now uses `vectorSearch()` and stores metadata as JSON plus typed columns for filtering. Rebuild LanceDB indexes with `build({ rebuild: true })`. Its tests now run against LanceDB itself instead of a mock.
+- The Pinecone store kept only `source`, `chunk` and `totalChunks`, so citations lost their page and section. It now stores and returns `page`, `pageEnd` and `section`; rebuild Pinecone indexes to add them.
+
 ## [2.1.1] - 2026-10-10
 
 ### Added

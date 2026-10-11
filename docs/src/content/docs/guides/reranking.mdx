@@ -1,0 +1,96 @@
+---
+title: Reranking
+description: Reorder search results with Cohere, Voyage, an LLM or your own function before the topK cut.
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+A reranker reads the query and each candidate passage together, so it judges relevance better than embedding similarity alone. RAGLite retrieves more results than you asked for (30 by default), reranks them, and keeps the best `topK`. Reranking is off by default.
+
+<Tabs syncKey="lang">
+<TabItem label="TypeScript">
+
+```ts
+await doc.search("How long do refunds take?", {
+  topK: 5,
+  rerank: { provider: "cohere" }, // uses COHERE_API_KEY
+});
+
+// Or set a default for search(), ask() and askStream(); rerank: false turns it off per call.
+new Document("./policy.pdf", { rerank: { provider: "voyage", candidates: 40 } });
+```
+
+Install the provider's package: `npm install @ai-sdk/cohere` or `npm install voyage-ai-provider`. RAGLite calls them through the AI SDK's `rerank()`.
+
+</TabItem>
+<TabItem label="Python">
+
+```python
+doc.search("How long do refunds take?", top_k=5, rerank={"provider": "cohere"})  # uses COHERE_API_KEY
+
+# Or set a default for search(), ask() and ask_stream(); rerank=False turns it off per call.
+Document("./policy.pdf", {"rerank": {"provider": "voyage", "candidates": 40}})
+```
+
+Install the provider's extra: `pip install 'raglite-toolkit[cohere]'` or `pip install 'raglite-toolkit[voyage]'`.
+
+</TabItem>
+</Tabs>
+
+## Providers
+
+| `provider` | Default `model` | API key |
+| --- | --- | --- |
+| `cohere` | `rerank-v3.5` | `apiKey`, or `COHERE_API_KEY` |
+| `voyage` | `rerank-2.5` | `apiKey`, or `VOYAGE_API_KEY` |
+| `llm` | The LLM's own | `rerank.llm`, or the document's `llm` |
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `provider` | — | `cohere`, `voyage` or `llm` |
+| `model` | See above | The reranking model. For `llm`, set `llm.model` instead |
+| `apiKey`, `baseURL` | From the environment | Credentials and endpoint for `cohere` and `voyage` (`baseURL` is Cohere only in Python) |
+| `llm` | The document's `llm` | The LLM config for `provider: "llm"` |
+| `candidates` | `max(30, topK)` | Results retrieved and reranked before the `topK` cut |
+
+The `llm` provider asks the LLM to order the passages. It needs no reranking API, but it is slower, costs an LLM call per search, and its scores only reflect rank.
+
+## Your own reranker
+
+Pass a function that takes the query and the candidates and returns them best first. RAGLite keeps the first `topK`.
+
+<Tabs syncKey="lang">
+<TabItem label="TypeScript">
+
+```ts
+await doc.search("refund policy", {
+  rerank: async (query, hits) => myCrossEncoder.sort(query, hits),
+});
+```
+
+</TabItem>
+<TabItem label="Python">
+
+```python
+doc.search("refund policy", rerank=lambda query, hits: my_cross_encoder.sort(query, hits))
+```
+
+</TabItem>
+</Tabs>
+
+## Scores
+
+With a built-in reranker, each result's `score` is the reranker's relevance score, and `scores.rerank` holds it beside the retrieval scores (`scores.vector`, and in keyword and hybrid modes `scores.keyword` and `scores.fused`). `distance` is `1 - score`. A function reranker keeps the scores its results already have.
+
+## Failures
+
+- If the reranking call fails (a network error, a rate limit, a bad reply from the LLM), RAGLite logs a warning and returns the results in their retrieval order.
+- A configuration problem throws `ConfigError` instead: an unknown provider, a missing package, `candidates` that is not a positive integer, or `provider: "llm"` with no LLM.
+
+## Collections
+
+A `DocumentCollection` retrieves candidates from every document, merges them, and reranks once.
+
+## Is it worth it?
+
+Measure it on your own questions with [`raglite eval --rerank`](/raglite/guides/evaluation/), which scores each retrieval mode with and without the reranker.
