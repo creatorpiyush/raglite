@@ -1,3 +1,4 @@
+import type { MetadataFilter } from "../retrieval/filter.js";
 import type { ChunkMetadata, IndexMetadata, StoredChunk } from "../types.js";
 
 /** A stored chunk without its embedding. */
@@ -16,7 +17,13 @@ export interface VectorStore {
   load(): Promise<void>;
   reset(): Promise<void>;
   add(chunks: StoredChunk[]): Promise<void>;
-  search(embedding: number[], topK: number): Promise<VectorSearchHit[]>;
+  /**
+   * `filter` holds conditions on per-chunk metadata (`chunk`, `totalChunks`,
+   * `page`, `pageEnd`, `section`); see `matchesFilter()`. Apply it before the
+   * `topK` cut. A store that ignores it still returns correct results, since
+   * Document filters again, but may return fewer than `topK`.
+   */
+  search(embedding: number[], topK: number, filter?: MetadataFilter): Promise<VectorSearchHit[]>;
   count(): number;
   saveIndexMetadata(metadata: IndexMetadata): Promise<void>;
   readIndexMetadata(): Promise<IndexMetadata | null>;
@@ -30,5 +37,5 @@ export interface VectorStore {
    * Optional. Native keyword search (for example a full-text index), used in
    * place of the built-in BM25 index. Higher `score` means a better match.
    */
-  keywordSearch?(query: string, topK: number): Promise<VectorSearchHit[]>;
+  keywordSearch?(query: string, topK: number, filter?: MetadataFilter): Promise<VectorSearchHit[]>;
 }

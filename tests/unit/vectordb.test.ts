@@ -1,7 +1,10 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import type { MetadataFilter } from "../../src/retrieval/filter.js";
 import type { StoredChunk } from "../../src/types.js";
+import type { VectorStore } from "../../src/vectordb/base.js";
+import { LanceDbVectorStore } from "../../src/vectordb/lancedb.js";
 import { MemoryVectorStore } from "../../src/vectordb/memory.js";
 import { makeTempWorkspace, type TempWorkspace } from "../helpers/tmp.js";
 
@@ -111,5 +114,69 @@ describe("MemoryVectorStore", () => {
     await a.add([chunk("1", "left-chunk", [1, 0, 0])]);
     expect(a.count()).toBe(1);
     expect(b.count()).toBe(0);
+  });
+});
+
+// Real stores, not mocks: the same filter must select the same chunks in each.
+describe.each([
+  ["memory", (dir: string) => new MemoryVectorStore(dir, "filters")],
+  ["lancedb", (dir: string) => new LanceDbVectorStore(dir, "filters")],
+] as const)("%s store", (_name, makeStore: (dir: string) => VectorStore) => {
+  const chunks: StoredChunk[] = [
+    {
+      id: "p1",
+      text: "intro",
+      embedding: unit([1, 0, 0]),
+      metadata: { source: "a.pdf", chunk: 1, totalChunks: 3, page: 1, section: "Intro" },
+    },
+    {
+      id: "p2",
+      text: "refunds",
+      embedding: unit([1, 1, 0]),
+      metadata: {
+        source: "a.pdf",
+        chunk: 2,
+        totalChunks: 3,
+        page: 2,
+        pageEnd: 3,
+        section: "O'Brien",
+      },
+    },
+    {
+      id: "p3",
+      text: "no location",
+      embedding: unit([0, 1, 0]),
+      metadata: { source: "a.pdf", chunk: 3, totalChunks: 3 },
+    },
+  ];
+
+  it.each<[string, MetadataFilter | undefined, string[]]>([
+    ["no filter", undefined, ["p1", "p2", "p3"]],
+    ["string with a quote", { section: "O'Brien" }, ["p2"]],
+    ["in", { chunk: { in: [1, 3] } }, ["p1", "p3"]],
+    ["range skips chunks without the field", { page: { gte: 1 } }, ["p1", "p2"]],
+    ["camelCase field", { pageEnd: { gte: 3 } }, ["p2"]],
+    ["empty in", { chunk: { in: [] } }, []],
+  ])("search filter: %s", async (_case, filter, ids) => {
+    const store = makeStore(ws.root);
+    await store.load();
+    await store.add(chunks);
+    const hits = await store.search(unit([1, 0.5, 0]), 10, filter);
+    expect(hits.map((h) => h.id).sort()).toEqual(ids);
+    for (const hit of hits) {
+      expect(hit.metadata).toEqual(chunks.find((c) => c.id === hit.id)!.metadata);
+      expect(hit.distance).toBeCloseTo(1 - hit.score, 5);
+    }
+  });
+
+  it("orders hits by similarity and lists stored chunks", async () => {
+    const store = makeStore(ws.root);
+    await store.load();
+    await store.add(chunks);
+    const hits = await store.search(unit([1, 0, 0]), 2);
+    expect(hits.map((h) => h.id)).toEqual(["p1", "p2"]);
+    expect(hits[0]!.score).toBeCloseTo(1, 5);
+    const listed = await store.listChunks!();
+    expect(listed.map((c) => c.id).sort()).toEqual(["p1", "p2", "p3"]);
   });
 });

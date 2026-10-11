@@ -5,6 +5,7 @@ import {
   DEFAULT_STORE_DIRNAME,
   DEFAULT_TOP_K,
 } from "./constants.js";
+import { type FilterScalar, validateCustomMetadata } from "./retrieval/filter.js";
 import type {
   EmbeddingProviderConfig,
   LLMProviderConfig,
@@ -26,6 +27,12 @@ export interface DocumentOptions {
   vectorStore?: VectorStoreProviderConfig | VectorStore;
   /** Default retrieval mode and hybrid options for search(), ask() and askStream(). */
   retrieval?: RetrievalOptions;
+  /**
+   * Your own fields (for example `{ tenant: "acme" }`), added to every search
+   * result's metadata and usable in `filter`. Values are strings, numbers or
+   * booleans. Changing them needs no rebuild.
+   */
+  metadata?: Record<string, FilterScalar>;
 }
 
 export interface ResolvedConfig {
@@ -39,6 +46,7 @@ export interface ResolvedConfig {
   logLevel: LogLevel;
   vectorStore: VectorStoreProviderConfig | VectorStore;
   retrieval: RetrievalOptions;
+  metadata: Record<string, FilterScalar>;
 }
 
 export function resolveConfig(options: DocumentOptions = {}): ResolvedConfig {
@@ -59,5 +67,6 @@ export function resolveConfig(options: DocumentOptions = {}): ResolvedConfig {
     logLevel: options.logLevel ?? "info",
     vectorStore,
     retrieval: options.retrieval ?? {},
+    metadata: options.metadata === undefined ? {} : validateCustomMetadata(options.metadata),
   };
 }

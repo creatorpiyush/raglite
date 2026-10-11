@@ -78,14 +78,18 @@ export {
 export type { McpServerOptions, McpTarget } from "./mcp/server.js";
 export { createMcpServer, serveMcp } from "./mcp/server.js";
 export type {
+  FilterCondition,
+  FilterScalar,
   KeywordHit,
   KeywordIndexFile,
+  MetadataFilter,
   RankedList,
   RetrievalPlan,
   RetrieveOptions,
 } from "./retrieval/index.js";
 export {
   KeywordIndex,
+  matchesFilter,
   Retriever,
   reciprocalRankFusion,
   resolveRetrievalPlan,

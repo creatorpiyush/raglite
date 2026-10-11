@@ -1,3 +1,5 @@
+export type { FilterCondition, FilterScalar, MetadataFilter } from "./filter.js";
+export { matchesFilter } from "./filter.js";
 export type { RankedList } from "./fusion.js";
 export { reciprocalRankFusion } from "./fusion.js";
 export type { KeywordHit, KeywordIndexFile } from "./keyword-index.js";

@@ -189,7 +189,12 @@ export class DocumentCollection {
 
     if (plan.mode === "vector") {
       const perDoc = await this.settle(docs, (doc) =>
-        doc.search(query, { topK: topK * 2, scoreThreshold, mode: "vector" }),
+        doc.search(query, {
+          topK: topK * 2,
+          scoreThreshold,
+          mode: "vector",
+          ...(plan.filter ? { filter: plan.filter } : {}),
+        }),
       );
       const allHits = perDoc.flat();
       allHits.sort((a, b) => b.score - a.score);

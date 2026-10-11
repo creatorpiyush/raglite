@@ -1,0 +1,209 @@
+{
+  "metadata": {
+    "source": "policy.pdf",
+    "chunk": 2,
+    "totalChunks": 5,
+    "page": 3,
+    "section": "Policies > Refunds",
+    "tenant": "acme",
+    "public": true
+  },
+  "cases": [
+    {
+      "name": "empty filter",
+      "filter": {},
+      "matches": true
+    },
+    {
+      "name": "string equality",
+      "filter": {
+        "source": "policy.pdf"
+      },
+      "matches": true
+    },
+    {
+      "name": "string mismatch",
+      "filter": {
+        "source": "other.pdf"
+      },
+      "matches": false
+    },
+    {
+      "name": "number equality",
+      "filter": {
+        "page": 3
+      },
+      "matches": true
+    },
+    {
+      "name": "number is not a string",
+      "filter": {
+        "page": "3"
+      },
+      "matches": false
+    },
+    {
+      "name": "boolean equality",
+      "filter": {
+        "public": true
+      },
+      "matches": true
+    },
+    {
+      "name": "boolean is not a number",
+      "filter": {
+        "public": 1
+      },
+      "matches": false
+    },
+    {
+      "name": "number is not a boolean",
+      "filter": {
+        "chunk": true
+      },
+      "matches": false
+    },
+    {
+      "name": "in",
+      "filter": {
+        "tenant": {
+          "in": ["globex", "acme"]
+        }
+      },
+      "matches": true
+    },
+    {
+      "name": "in without match",
+      "filter": {
+        "tenant": {
+          "in": ["globex"]
+        }
+      },
+      "matches": false
+    },
+    {
+      "name": "empty in",
+      "filter": {
+        "tenant": {
+          "in": []
+        }
+      },
+      "matches": false
+    },
+    {
+      "name": "range inside",
+      "filter": {
+        "page": {
+          "gte": 3,
+          "lte": 5
+        }
+      },
+      "matches": true
+    },
+    {
+      "name": "range outside",
+      "filter": {
+        "page": {
+          "gt": 3
+        }
+      },
+      "matches": false
+    },
+    {
+      "name": "range on a string",
+      "filter": {
+        "section": {
+          "gte": 1
+        }
+      },
+      "matches": false
+    },
+    {
+      "name": "range and in",
+      "filter": {
+        "page": {
+          "in": [1, 3],
+          "lt": 4
+        }
+      },
+      "matches": true
+    },
+    {
+      "name": "missing field",
+      "filter": {
+        "pageEnd": {
+          "gte": 1
+        }
+      },
+      "matches": false
+    },
+    {
+      "name": "missing field equality",
+      "filter": {
+        "owner": "bob"
+      },
+      "matches": false
+    },
+    {
+      "name": "every field must match",
+      "filter": {
+        "tenant": "acme",
+        "page": 4
+      },
+      "matches": false
+    },
+    {
+      "name": "error: unknown operator",
+      "filter": {
+        "page": {
+          "ne": 3
+        }
+      },
+      "error": true
+    },
+    {
+      "name": "error: no operators",
+      "filter": {
+        "page": {}
+      },
+      "error": true
+    },
+    {
+      "name": "error: null value",
+      "filter": {
+        "page": null
+      },
+      "error": true
+    },
+    {
+      "name": "error: array value",
+      "filter": {
+        "page": [3]
+      },
+      "error": true
+    },
+    {
+      "name": "error: in not an array",
+      "filter": {
+        "tenant": {
+          "in": "acme"
+        }
+      },
+      "error": true
+    },
+    {
+      "name": "error: range not a number",
+      "filter": {
+        "page": {
+          "gte": "3"
+        }
+      },
+      "error": true
+    },
+    {
+      "name": "error: not an object",
+      "filter": "page",
+      "error": true
+    }
+  ]
+}

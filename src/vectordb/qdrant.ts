@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { VectorDBError } from "../errors.js";
+import { filterConditions, type MetadataFilter } from "../retrieval/filter.js";
 import type {
   ChunkMetadata,
   IndexMetadata,
@@ -144,7 +145,15 @@ export class QdrantVectorStore implements VectorStore {
     }
   }
 
-  async search(embedding: number[], topK: number): Promise<VectorSearchHit[]> {
+  async search(
+    embedding: number[],
+    topK: number,
+    filter?: MetadataFilter,
+  ): Promise<VectorSearchHit[]> {
+    const must = [
+      ...(this.shared ? this.namespaceFilter.must : []),
+      ...(filter ? qdrantConditions(filter) : []),
+    ];
     try {
       const res = await fetch(`${this.url}/collections/${this.collectionName}/points/search`, {
         method: "POST",
@@ -153,7 +162,7 @@ export class QdrantVectorStore implements VectorStore {
           vector: embedding,
           limit: topK + 1, // +1 in case metadata point matches
           with_payload: true,
-          ...(this.shared ? { filter: this.namespaceFilter } : {}),
+          ...(must.length > 0 ? { filter: { must } } : {}),
         }),
       });
       if (res.status !== 200) {
@@ -318,4 +327,18 @@ export class QdrantVectorStore implements VectorStore {
       return null;
     }
   }
+}
+
+/** Qdrant payload conditions for a chunk filter; chunk metadata lives under `metadata`. */
+export function qdrantConditions(filter: MetadataFilter): object[] {
+  const range: Record<string, Record<string, unknown>> = {};
+  const out: object[] = [];
+  for (const [field, op, value] of filterConditions(filter)) {
+    const key = `metadata.${field}`;
+    if (op === "eq") out.push({ key, match: { value } });
+    else if (op === "in") out.push({ key, match: { any: value } });
+    else range[key] = { ...range[key], [op]: value };
+  }
+  for (const [key, bounds] of Object.entries(range)) out.push({ key, range: bounds });
+  return out;
 }

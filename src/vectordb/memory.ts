@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { VectorDBError } from "../errors.js";
+import { type MetadataFilter, matchesFilter } from "../retrieval/filter.js";
 import type { IndexMetadata, StoredChunk } from "../types.js";
 import type { IndexedChunk, VectorSearchHit, VectorStore } from "./base.js";
 
@@ -56,20 +57,22 @@ export class MemoryVectorStore implements VectorStore {
     await this.persist();
   }
 
-  async search(embedding: number[], topK: number): Promise<VectorSearchHit[]> {
-    if (this.chunks.length === 0) return [];
-
-    const scored: VectorSearchHit[] = new Array(this.chunks.length);
-    for (let i = 0; i < this.chunks.length; i++) {
-      const c = this.chunks[i]!;
+  async search(
+    embedding: number[],
+    topK: number,
+    filter?: MetadataFilter,
+  ): Promise<VectorSearchHit[]> {
+    const scored: VectorSearchHit[] = [];
+    for (const c of this.chunks) {
+      if (filter && !matchesFilter(c.metadata, filter)) continue;
       const score = dot(embedding, c.embedding);
-      scored[i] = {
+      scored.push({
         id: c.id,
         text: c.text,
         metadata: c.metadata,
         score,
         distance: 1 - score,
-      };
+      });
     }
     scored.sort((a, b) => b.score - a.score);
     return scored.slice(0, topK);
