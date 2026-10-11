@@ -6,5 +6,7 @@ export type { KeywordHit, KeywordIndexFile } from "./keyword-index.js";
 export { KeywordIndex } from "./keyword-index.js";
 export type { RetrievalPlan } from "./plan.js";
 export { resolveRetrievalPlan } from "./plan.js";
+export type { RerankConfig, Reranker, RerankProviderName } from "./rerank.js";
+export { DEFAULT_RERANK_MODELS } from "./rerank.js";
 export type { RetrieveOptions } from "./retriever.js";
 export { Retriever } from "./retriever.js";

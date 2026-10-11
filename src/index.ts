@@ -84,10 +84,14 @@ export type {
   KeywordIndexFile,
   MetadataFilter,
   RankedList,
+  RerankConfig,
+  Reranker,
+  RerankProviderName,
   RetrievalPlan,
   RetrieveOptions,
 } from "./retrieval/index.js";
 export {
+  DEFAULT_RERANK_MODELS,
   KeywordIndex,
   matchesFilter,
   Retriever,

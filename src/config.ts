@@ -6,6 +6,7 @@ import {
   DEFAULT_TOP_K,
 } from "./constants.js";
 import { type FilterScalar, validateCustomMetadata } from "./retrieval/filter.js";
+import type { RerankConfig, Reranker } from "./retrieval/rerank.js";
 import type {
   EmbeddingProviderConfig,
   LLMProviderConfig,
@@ -33,6 +34,8 @@ export interface DocumentOptions {
    * booleans. Changing them needs no rebuild.
    */
   metadata?: Record<string, FilterScalar>;
+  /** Default reranker for search(), ask() and askStream(); off unless set. */
+  rerank?: RerankConfig | Reranker;
 }
 
 export interface ResolvedConfig {
@@ -47,6 +50,7 @@ export interface ResolvedConfig {
   vectorStore: VectorStoreProviderConfig | VectorStore;
   retrieval: RetrievalOptions;
   metadata: Record<string, FilterScalar>;
+  rerank?: RerankConfig | Reranker;
 }
 
 export function resolveConfig(options: DocumentOptions = {}): ResolvedConfig {
@@ -68,5 +72,6 @@ export function resolveConfig(options: DocumentOptions = {}): ResolvedConfig {
     vectorStore,
     retrieval: options.retrieval ?? {},
     metadata: options.metadata === undefined ? {} : validateCustomMetadata(options.metadata),
+    ...(options.rerank ? { rerank: options.rerank } : {}),
   };
 }

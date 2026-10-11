@@ -35,6 +35,12 @@ import {
   writeKeywordFile,
 } from "../retrieval/keyword-index.js";
 import { type RetrievalPlan, resolveRetrievalPlan } from "../retrieval/plan.js";
+import {
+  type RerankConfig,
+  type Reranker,
+  rerankCandidates,
+  rerankHits,
+} from "../retrieval/rerank.js";
 import { Retriever } from "../retrieval/retriever.js";
 import { hasUnspacedText } from "../text/scripts.js";
 import { type SearchToolOptions, searchTool } from "../tools/search-tool.js";
@@ -86,6 +92,11 @@ export interface SearchOptions {
    * `section`, `chunk`, `totalChunks` and your own `metadata` fields.
    */
   filter?: MetadataFilter;
+  /**
+   * Reorders the first `rerank.candidates` results with a reranking model
+   * (or your function) before the topK cut. `false` turns off the default.
+   */
+  rerank?: RerankConfig | Reranker | false;
 }
 
 /** @internal Candidate lists of one document, before fusion. */
@@ -352,6 +363,17 @@ export class Document {
    * hybrid retrieval.
    */
   async search(query: string, options: SearchOptions = {}): Promise<SearchResult[]> {
+    const rerank = options.rerank ?? this.config.rerank;
+    if (!rerank) return this.retrieve(query, options);
+    const topK = options.topK ?? this.config.topK;
+    const hits = await this.retrieve(query, { ...options, topK: rerankCandidates(rerank, topK) });
+    return rerankHits(query, hits, rerank, topK, {
+      logger: this.logger,
+      ...(this.config.llm ? { llm: this.config.llm } : {}),
+    });
+  }
+
+  private async retrieve(query: string, options: SearchOptions): Promise<SearchResult[]> {
     const plan = this.retrievalPlan(options);
     if (plan.mode === "vector") {
       await this.ensureReady();
@@ -692,6 +714,7 @@ export function searchOptionsOf(options: SearchOptions): SearchOptions {
   if (options.mode !== undefined) out.mode = options.mode;
   if (options.hybrid !== undefined) out.hybrid = options.hybrid;
   if (options.filter !== undefined) out.filter = options.filter;
+  if (options.rerank !== undefined) out.rerank = options.rerank;
   return out;
 }
 
