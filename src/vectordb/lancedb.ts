@@ -1,8 +1,10 @@
 import { existsSync } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import type * as lancedb from "@lancedb/lancedb";
 import { missingPackage, VectorDBError } from "../errors.js";
+import { filterConditions, type MetadataFilter } from "../retrieval/filter.js";
 import type {
   ChunkMetadata,
   IndexMetadata,
@@ -10,6 +12,8 @@ import type {
   VectorStoreProviderConfig,
 } from "../types.js";
 import type { IndexedChunk, VectorSearchHit, VectorStore } from "./base.js";
+
+const TABLE = "chunks";
 
 export class LanceDbVectorStore implements VectorStore {
   readonly namespace: string;
@@ -62,21 +66,28 @@ export class LanceDbVectorStore implements VectorStore {
   async add(chunks: StoredChunk[]): Promise<void> {
     if (chunks.length === 0) return;
     const db = await this.ensureDb();
-    const tableName = "chunks";
-    const data = chunks.map((c) => ({
-      id: c.id,
-      vector: c.embedding,
-      text: c.text,
-      metadata: c.metadata,
-    }));
-
     try {
-      const tableNames = await db.tableNames();
-      if (tableNames.includes(tableName)) {
-        const table = await db.openTable(tableName);
-        await table.add(data);
+      const { makeArrowTable, schema } = await arrowTools(chunks[0]!.embedding.length);
+      // Metadata is stored as JSON, plus flat typed columns for filtering:
+      // LanceDB 0.4 cannot query the struct column it would otherwise infer.
+      const data = makeArrowTable(
+        chunks.map((c) => ({
+          id: c.id,
+          vector: c.embedding,
+          text: c.text,
+          metadata: JSON.stringify(c.metadata),
+          chunk: c.metadata.chunk,
+          totalChunks: c.metadata.totalChunks,
+          page: c.metadata.page ?? null,
+          pageEnd: c.metadata.pageEnd ?? null,
+          section: c.metadata.section ?? null,
+        })),
+        { schema },
+      );
+      if ((await db.tableNames()).includes(TABLE)) {
+        await (await db.openTable(TABLE)).add(data);
       } else {
-        await db.createTable(tableName, data);
+        await db.createTable(TABLE, data);
       }
       this.cachedCount += chunks.length;
     } catch (cause) {
@@ -84,45 +95,30 @@ export class LanceDbVectorStore implements VectorStore {
     }
   }
 
-  async search(embedding: number[], topK: number): Promise<VectorSearchHit[]> {
+  async search(
+    embedding: number[],
+    topK: number,
+    filter?: MetadataFilter,
+  ): Promise<VectorSearchHit[]> {
     const db = await this.ensureDb();
-    const tableName = "chunks";
     try {
-      const tableNames = await db.tableNames();
-      if (!tableNames.includes(tableName)) {
-        return [];
-      }
-      const table = await db.openTable(tableName);
-      interface LanceDbSearchQuery {
-        metricType(type: string): LanceDbSearchQuery;
-        limit(k: number): LanceDbSearchQuery;
-        toArray(): Promise<
-          Array<{
-            id: string;
-            text: string;
-            metadata: unknown;
-            _distance?: number;
-          }>
-        >;
-      }
-
-      const results = await (table as unknown as { search(e: number[]): LanceDbSearchQuery })
-        .search(embedding)
-        .metricType("cosine")
-        .limit(topK)
-        .toArray();
-
-      return results.map((r) => {
-        const distance = r._distance ?? 0;
-        const score = 1 - distance;
-        return {
-          id: r.id,
-          text: r.text,
-          metadata: r.metadata as ChunkMetadata,
-          score,
-          distance,
-        };
-      });
+      if (!(await db.tableNames()).includes(TABLE)) return [];
+      const table = await db.openTable(TABLE);
+      let query = table.vectorSearch(embedding).distanceType("cosine").limit(topK);
+      if (filter) query = query.where(lanceWhere(filter));
+      const rows = (await query.toArray()) as Array<{
+        id: string;
+        text: string;
+        metadata: string;
+        _distance: number;
+      }>;
+      return rows.map((r) => ({
+        id: r.id,
+        text: r.text,
+        metadata: JSON.parse(r.metadata) as ChunkMetadata,
+        score: 1 - r._distance,
+        distance: r._distance,
+      }));
     } catch (cause) {
       throw new VectorDBError(`Failed to search LanceDB`, { cause });
     }
@@ -135,14 +131,18 @@ export class LanceDbVectorStore implements VectorStore {
   async listChunks(): Promise<IndexedChunk[]> {
     const db = await this.ensureDb();
     try {
-      if (!(await db.tableNames()).includes("chunks")) return [];
-      const table = await db.openTable("chunks");
+      if (!(await db.tableNames()).includes(TABLE)) return [];
+      const table = await db.openTable(TABLE);
       const rows = (await table.query().select(["id", "text", "metadata"]).toArray()) as Array<{
         id: string;
         text: string;
-        metadata: unknown;
+        metadata: string;
       }>;
-      return rows.map((r) => ({ id: r.id, text: r.text, metadata: r.metadata as ChunkMetadata }));
+      return rows.map((r) => ({
+        id: r.id,
+        text: r.text,
+        metadata: JSON.parse(r.metadata) as ChunkMetadata,
+      }));
     } catch (cause) {
       throw new VectorDBError(`Failed to list chunks in LanceDB`, { cause });
     }
@@ -167,4 +167,50 @@ export class LanceDbVectorStore implements VectorStore {
       });
     }
   }
+}
+
+/**
+ * lancedb's makeArrowTable and the table schema. apache-arrow is loaded
+ * through lancedb so both use the same copy.
+ */
+async function arrowTools(dimensions: number) {
+  const { makeArrowTable } = await import("@lancedb/lancedb");
+  const lancedbRequire = createRequire(createRequire(import.meta.url).resolve("@lancedb/lancedb"));
+  const arrow = lancedbRequire("apache-arrow") as typeof import("apache-arrow");
+  const { Field, FixedSizeList, Float32, Float64, Schema, Utf8 } = arrow;
+  const schema = new Schema([
+    new Field("id", new Utf8(), false),
+    new Field(
+      "vector",
+      new FixedSizeList(dimensions, new Field("item", new Float32(), true)),
+      false,
+    ),
+    new Field("text", new Utf8(), false),
+    new Field("metadata", new Utf8(), false),
+    new Field("chunk", new Float64(), false),
+    new Field("totalChunks", new Float64(), false),
+    new Field("page", new Float64(), true),
+    new Field("pageEnd", new Float64(), true),
+    new Field("section", new Utf8(), true),
+  ]);
+  return { makeArrowTable, schema };
+}
+
+const SQL_OPS = { eq: "=", gt: ">", gte: ">=", lt: "<", lte: "<=" } as const;
+
+function sqlValue(value: unknown): string {
+  if (typeof value === "string") return `'${value.replaceAll("'", "''")}'`;
+  return String(value);
+}
+
+/** SQL predicate for a chunk filter; fields are the flat columns written by add(). */
+export function lanceWhere(filter: MetadataFilter): string {
+  return filterConditions(filter)
+    .map(([field, op, value]) =>
+      // Backticks, or Lance folds pageEnd to pageend.
+      op === "in"
+        ? `\`${field}\` IN (${(value as unknown[]).map(sqlValue).join(", ") || "NULL"})`
+        : `\`${field}\` ${SQL_OPS[op]} ${sqlValue(value)}`,
+    )
+    .join(" AND ");
 }

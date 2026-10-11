@@ -1,43 +1,7 @@
-import { existsSync } from "node:fs";
-import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { LanceDbVectorStore } from "../../src/vectordb/lancedb.js";
 import { PineconeVectorStore } from "../../src/vectordb/pinecone.js";
 import { QdrantVectorStore } from "../../src/vectordb/qdrant.js";
 import { makeTempWorkspace, type TempWorkspace } from "../helpers/tmp.js";
-
-// Mock @lancedb/lancedb
-const mockTable = {
-  add: vi.fn(),
-  search: vi.fn().mockImplementation(() => ({
-    metricType: vi.fn().mockImplementation(() => ({
-      limit: vi.fn().mockImplementation(() => ({
-        toArray: vi.fn().mockResolvedValue([
-          {
-            id: "1",
-            text: "test text",
-            metadata: { source: "test.txt", chunk: 1, totalChunks: 1 },
-            _distance: 0.1,
-          },
-        ]),
-      })),
-    })),
-  })),
-};
-
-const mockTables = new Set<string>();
-const mockDb = {
-  tableNames: vi.fn().mockImplementation(async () => Array.from(mockTables)),
-  openTable: vi.fn().mockResolvedValue(mockTable),
-  createTable: vi.fn().mockImplementation(async (name) => {
-    mockTables.add(name);
-    return mockTable;
-  }),
-};
-
-vi.mock("@lancedb/lancedb", () => ({
-  connect: vi.fn().mockImplementation(async () => mockDb),
-}));
 
 describe("Custom Vector DBs", () => {
   let ws: TempWorkspace;
@@ -46,13 +10,11 @@ describe("Custom Vector DBs", () => {
   beforeEach(() => {
     ws = makeTempWorkspace();
     originalFetch = globalThis.fetch;
-    mockTables.clear();
   });
 
   afterEach(() => {
     globalThis.fetch = originalFetch;
     ws.cleanup();
-    vi.clearAllMocks();
   });
 
   describe("QdrantVectorStore", () => {
@@ -241,6 +203,31 @@ describe("Custom Vector DBs", () => {
       expect(metaIds).toHaveLength(2);
       expect(metaIds[0]).not.toBe(metaIds[1]);
     });
+
+    it("sends a chunk filter as payload conditions, alongside the namespace", async () => {
+      const bodies: Record<string, unknown>[] = [];
+      globalThis.fetch = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+        if (url.endsWith("/points/search")) bodies.push(JSON.parse(init!.body as string));
+        return new Response(JSON.stringify({ result: [] }), { status: 200 });
+      });
+      const store = new QdrantVectorStore(
+        { provider: "qdrant", url: "http://qdrant:6333", indexName: "shared" },
+        "ns-a",
+      );
+      await store.search([1, 0, 0], 3, {
+        section: "Refunds",
+        chunk: { in: [1, 2] },
+        page: { gte: 3, lt: 5 },
+      });
+      expect(bodies[0]!.filter).toEqual({
+        must: [
+          { key: "namespace", match: { value: "ns-a" } },
+          { key: "metadata.section", match: { value: "Refunds" } },
+          { key: "metadata.chunk", match: { any: [1, 2] } },
+          { key: "metadata.page", range: { gte: 3, lt: 5 } },
+        ],
+      });
+    });
   });
 
   describe("PineconeVectorStore", () => {
@@ -332,50 +319,63 @@ describe("Custom Vector DBs", () => {
       await store.reset();
       expect(store.count()).toBe(0);
     });
-  });
 
-  describe("LanceDbVectorStore", () => {
-    it("persists locally and delegates to @lancedb/lancedb", async () => {
-      const store = new LanceDbVectorStore(ws.root, "lancedb-ns");
-      await store.load();
-
-      await store.saveIndexMetadata({
-        version: "1.0.0",
-        source: "doc.txt",
-        sourceHash: "lancehash",
-        chunkSize: 100,
-        overlap: 10,
-        embeddingProvider: "local",
-        embeddingModel: "m",
-        embeddingDimensions: 3,
-        chunkCount: 12,
-        createdAt: new Date().toISOString(),
+    it("stores page and section, returns them, and sends a chunk filter", async () => {
+      let upserted: { vectors: { metadata: Record<string, unknown> }[] } | undefined;
+      let query: Record<string, unknown> | undefined;
+      globalThis.fetch = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+        if (url.endsWith("/vectors/upsert")) upserted = JSON.parse(init!.body as string);
+        if (url.endsWith("/query")) {
+          query = JSON.parse(init!.body as string);
+          return new Response(
+            JSON.stringify({
+              matches: [
+                {
+                  id: "c1",
+                  score: 0.9,
+                  metadata: {
+                    text: "t",
+                    source: "a.pdf",
+                    chunk: 1,
+                    totalChunks: 2,
+                    page: 3,
+                    section: "Refunds",
+                  },
+                },
+              ],
+            }),
+            { status: 200 },
+          );
+        }
+        return new Response("{}", { status: 200 });
       });
-
-      expect(existsSync(join(ws.root, "lancedb-ns", "metadata.json"))).toBe(true);
-
-      const meta = await store.readIndexMetadata();
-      expect(meta?.sourceHash).toBe("lancehash");
-      expect(store.count()).toBe(12);
-
+      const store = new PineconeVectorStore(
+        { provider: "pinecone", url: "https://idx.pinecone.io", apiKey: "k" },
+        "ns",
+      );
       await store.add([
         {
-          id: "chunk-id",
-          text: "hello",
-          embedding: [1, 2, 3],
-          metadata: { source: "doc.txt", chunk: 1, totalChunks: 1 },
+          id: "c1",
+          text: "t",
+          embedding: [1, 0],
+          metadata: { source: "a.pdf", chunk: 1, totalChunks: 2, page: 3, section: "Refunds" },
+        },
+        {
+          id: "c2",
+          text: "u",
+          embedding: [0, 1],
+          metadata: { source: "a.pdf", chunk: 2, totalChunks: 2 },
         },
       ]);
-      expect(mockDb.createTable).toHaveBeenCalled();
+      expect(upserted!.vectors[0]!.metadata).toMatchObject({ page: 3, section: "Refunds" });
+      expect(upserted!.vectors[1]!.metadata).not.toHaveProperty("page");
 
-      const hits = await store.search([1, 2, 3], 1);
-      expect(hits).toHaveLength(1);
-      expect(hits[0]?.text).toBe("test text");
-      expect(hits[0]?.score).toBeCloseTo(0.9);
-
-      await store.reset();
-      expect(store.count()).toBe(0);
-      expect(existsSync(join(ws.root, "lancedb-ns"))).toBe(false);
+      const hits = await store.search([1, 0], 3, {
+        page: { gte: 3 },
+        section: { in: ["Refunds"] },
+      });
+      expect(query!.filter).toEqual({ page: { $gte: 3 }, section: { $in: ["Refunds"] } });
+      expect(hits[0]!.metadata).toMatchObject({ page: 3, section: "Refunds" });
     });
   });
 });

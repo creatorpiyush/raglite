@@ -61,6 +61,8 @@ export interface SearchScores {
   keyword?: number;
   /** Raw Reciprocal Rank Fusion score; `score` is this normalised to [0, 1]. */
   fused?: number;
+  /** The reranker's relevance score, when `rerank` is set; `score` then equals it. */
+  rerank?: number;
 }
 
 export interface SearchResult {
@@ -70,7 +72,7 @@ export interface SearchResult {
   /** Cosine similarity in vector mode; normalised fused rank score in keyword and hybrid modes. */
   score: number;
   distance: number;
-  /** Set in keyword and hybrid modes. */
+  /** Set in keyword and hybrid modes, and with `rerank`. */
   scores?: SearchScores;
 }
 

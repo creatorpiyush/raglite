@@ -7,6 +7,7 @@ import { PACKAGE_VERSION } from "../constants.js";
 import type { DocumentCollection } from "../core/collection.js";
 import type { Document } from "../core/document.js";
 import { RagLiteError } from "../errors.js";
+import { type MetadataFilter, validateFilter } from "../retrieval/filter.js";
 import type { LLMProviderConfig } from "../types.js";
 import { AskRequestSchema, SearchRequestSchema } from "./schemas.js";
 
@@ -128,6 +129,7 @@ export function buildApp(target: ServerTarget, options: ServeOptions): Hono {
       ...(body.topK !== undefined ? { topK: body.topK } : {}),
       ...(body.scoreThreshold !== undefined ? { scoreThreshold: body.scoreThreshold } : {}),
       ...(body.mode !== undefined ? { mode: body.mode } : {}),
+      ...(body.filter !== undefined ? { filter: body.filter as MetadataFilter } : {}),
     });
     return c.json({ results });
   });
@@ -142,6 +144,8 @@ export function buildApp(target: ServerTarget, options: ServeOptions): Hono {
       if (body.topK !== undefined) askOptions.topK = body.topK;
       if (body.scoreThreshold !== undefined) askOptions.scoreThreshold = body.scoreThreshold;
       if (body.mode !== undefined) askOptions.mode = body.mode;
+      // Validated here, since a streamed answer cannot report it as a 400.
+      if (body.filter !== undefined) askOptions.filter = validateFilter(body.filter);
       if (body.includeCitations !== undefined) askOptions.includeCitations = body.includeCitations;
 
       if (body.stream) {

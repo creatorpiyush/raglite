@@ -13,6 +13,7 @@ import { DirectoryLoader, isSupportedFile, isUrl } from "../loaders/index.js";
 import { reciprocalRankFusion } from "../retrieval/fusion.js";
 import { byScoreThenId, type KeywordHit } from "../retrieval/keyword-index.js";
 import { resolveRetrievalPlan } from "../retrieval/plan.js";
+import { rerankCandidates, rerankHits } from "../retrieval/rerank.js";
 import { type SearchToolOptions, searchTool } from "../tools/search-tool.js";
 import type { LLMProviderConfig, SearchResult } from "../types.js";
 import { createLogger, type Logger } from "../utils/logger.js";
@@ -177,6 +178,18 @@ export class DocumentCollection {
    * (default), keyword or hybrid retrieval.
    */
   async search(query: string, options: SearchOptions = {}): Promise<SearchResult[]> {
+    const rerank = options.rerank ?? this.config.rerank;
+    if (!rerank) return this.retrieve(query, options);
+    const topK = options.topK ?? this.config.topK;
+    const hits = await this.retrieve(query, { ...options, topK: rerankCandidates(rerank, topK) });
+    return rerankHits(query, hits, rerank, topK, {
+      logger: this.logger,
+      ...(this.config.llm ? { llm: this.config.llm } : {}),
+    });
+  }
+
+  /** Merged retrieval over every document, without reranking. */
+  private async retrieve(query: string, options: SearchOptions): Promise<SearchResult[]> {
     const topK = options.topK ?? this.config.topK;
     const scoreThreshold = options.scoreThreshold ?? this.config.scoreThreshold;
     const plan = resolveRetrievalPlan(this.config.retrieval, options, topK, scoreThreshold);
@@ -189,7 +202,13 @@ export class DocumentCollection {
 
     if (plan.mode === "vector") {
       const perDoc = await this.settle(docs, (doc) =>
-        doc.search(query, { topK: topK * 2, scoreThreshold, mode: "vector" }),
+        doc.search(query, {
+          topK: topK * 2,
+          scoreThreshold,
+          mode: "vector",
+          rerank: false,
+          ...(plan.filter ? { filter: plan.filter } : {}),
+        }),
       );
       const allHits = perDoc.flat();
       allHits.sort((a, b) => b.score - a.score);

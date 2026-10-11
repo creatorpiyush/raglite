@@ -1,0 +1,113 @@
+---
+title: Metadata filters
+description: Search only the chunks whose metadata matches, such as one customer's documents or a range of pages.
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+`filter` keeps only the chunks whose metadata matches. Use it to search one customer's documents, one file in a collection, or a range of PDF pages. Filters work in every retrieval mode and with every vector store, and they are applied before the `topK` cut, so you still get `topK` results when that many match.
+
+<Tabs syncKey="lang">
+<TabItem label="TypeScript">
+
+```ts
+await doc.search("refund policy", {
+  filter: { page: { gte: 3, lte: 5 }, section: "Refunds" },
+});
+
+await collection.ask("What is the refund window?", {
+  filter: { source: { in: ["policy.pdf", "faq.md"] } },
+});
+```
+
+</TabItem>
+<TabItem label="Python">
+
+```python
+doc.search("refund policy", filter={"page": {"gte": 3, "lte": 5}, "section": "Refunds"})
+
+collection.ask(
+    "What is the refund window?",
+    {"filter": {"source": {"in": ["policy.pdf", "faq.md"]}}},
+)
+```
+
+</TabItem>
+</Tabs>
+
+## Conditions
+
+Every field in the filter must match.
+
+| Condition | Matches when the field | Example |
+| --- | --- | --- |
+| A plain value | Equals it | `{ section: "Refunds" }` |
+| `in` | Equals one of the values | `{ source: { in: ["a.pdf", "b.pdf"] } }` |
+| `gt`, `gte`, `lt`, `lte` | Is a number in the range | `{ page: { gte: 3, lt: 10 } }` |
+
+- Several operators on one field are combined with AND: `{ page: { gte: 3, lte: 5 } }`.
+- A chunk without the field never matches. A filter on `page` skips Markdown chunks, which have no page.
+- Types must match: `{ page: "3" }` does not match page `3`, and `{ flag: 1 }` does not match `true`.
+- An unknown operator or a value of the wrong type throws `ConfigError`.
+
+## Fields
+
+| Field | Set by | Value |
+| --- | --- | --- |
+| `source` | Every document | The file name, URL or `fromText` id |
+| `chunk`, `totalChunks` | Every document | The chunk's position, from 1 |
+| `page`, `pageEnd` | PDFs | First and last page of the chunk |
+| `section` | Markdown | The heading path, such as `"Policies > Refunds"` |
+| Your own fields | The `metadata` option | Strings, numbers or booleans |
+
+## Your own metadata
+
+Give a document fields of your own with the `metadata` option. They are added to every search result's metadata and can be used in filters. A common use is one index per customer, or per database row, searched through a single collection or API.
+
+<Tabs syncKey="lang">
+<TabItem label="TypeScript">
+
+```ts
+const doc = Document.fromText(`ticket-${row.id}`, row.body, {
+  metadata: { tenant: row.tenantId, status: row.status },
+});
+await doc.build();
+
+await doc.search("billing error", { filter: { tenant: "acme", status: "open" } });
+```
+
+</TabItem>
+<TabItem label="Python">
+
+```python
+doc = Document.from_text(
+    f"ticket-{row.id}", row.body, {"metadata": {"tenant": row.tenant_id, "status": row.status}}
+)
+doc.build()
+
+doc.search("billing error", filter={"tenant": "acme", "status": "open"})
+```
+
+</TabItem>
+</Tabs>
+
+- `metadata` cannot use the built-in field names (`source`, `chunk`, `totalChunks`, `page`, `pageEnd`, `section`).
+- The values are not stored in the index, so changing them needs no rebuild.
+- A `DocumentCollection` passes its `metadata` option to every document in it.
+
+## How it runs
+
+Fields that are the same for the whole document (`source` and your own metadata) are checked once per document: a document that does not match is skipped without searching. The other fields are filtered inside the vector store, before the `topK` cut:
+
+| Store | How `chunk`, `page`, `pageEnd` and `section` are filtered |
+| --- | --- |
+| Memory (default) | In memory |
+| Qdrant | A payload filter on `metadata.*` |
+| Pinecone | A metadata filter. Indexes built by the TypeScript SDK before 2.2 have no `page`, `pageEnd` or `section`: rebuild them to filter on those |
+| LanceDB (TypeScript) | A `where` clause on typed columns |
+| Keyword index (BM25) | In memory, before ranking |
+| Your own store | See [Vector stores](/raglite/guides/vector-stores/#your-own-store) |
+
+## REST API
+
+`POST /search` and `POST /ask` take the same `filter` object in the request body. See [REST API](/raglite/guides/rest-api/).

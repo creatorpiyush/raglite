@@ -15,6 +15,7 @@ import { fileURLToPath } from "node:url";
 import { RecursiveChunker } from "../src/chunking/index.js";
 import { chunkLocation, markdownHeadings, pageStarts } from "../src/chunking/locations.js";
 import { extractCitations } from "../src/llm/prompt.js";
+import { matchesFilter, validateFilter } from "../src/retrieval/filter.js";
 import { reciprocalRankFusion } from "../src/retrieval/fusion.js";
 import { KeywordIndex } from "../src/retrieval/keyword-index.js";
 import { tokenize } from "../src/text/tokenizer.js";
@@ -239,7 +240,55 @@ const hash = {
   ),
 };
 
+const filterMetadata = {
+  source: "policy.pdf",
+  chunk: 2,
+  totalChunks: 5,
+  page: 3,
+  section: "Policies > Refunds",
+  tenant: "acme",
+  public: true,
+};
+const filterInputs: { name: string; filter: unknown }[] = [
+  { name: "empty filter", filter: {} },
+  { name: "string equality", filter: { source: "policy.pdf" } },
+  { name: "string mismatch", filter: { source: "other.pdf" } },
+  { name: "number equality", filter: { page: 3 } },
+  { name: "number is not a string", filter: { page: "3" } },
+  { name: "boolean equality", filter: { public: true } },
+  { name: "boolean is not a number", filter: { public: 1 } },
+  { name: "number is not a boolean", filter: { chunk: true } },
+  { name: "in", filter: { tenant: { in: ["globex", "acme"] } } },
+  { name: "in without match", filter: { tenant: { in: ["globex"] } } },
+  { name: "empty in", filter: { tenant: { in: [] } } },
+  { name: "range inside", filter: { page: { gte: 3, lte: 5 } } },
+  { name: "range outside", filter: { page: { gt: 3 } } },
+  { name: "range on a string", filter: { section: { gte: 1 } } },
+  { name: "range and in", filter: { page: { in: [1, 3], lt: 4 } } },
+  { name: "missing field", filter: { pageEnd: { gte: 1 } } },
+  { name: "missing field equality", filter: { owner: "bob" } },
+  { name: "every field must match", filter: { tenant: "acme", page: 4 } },
+  { name: "error: unknown operator", filter: { page: { ne: 3 } } },
+  { name: "error: no operators", filter: { page: {} } },
+  { name: "error: null value", filter: { page: null } },
+  { name: "error: array value", filter: { page: [3] } },
+  { name: "error: in not an array", filter: { tenant: { in: "acme" } } },
+  { name: "error: range not a number", filter: { page: { gte: "3" } } },
+  { name: "error: not an object", filter: "page" },
+];
+const filter = {
+  metadata: filterMetadata,
+  cases: filterInputs.map(({ name, filter }) => {
+    try {
+      return { name, filter, matches: matchesFilter(filterMetadata, validateFilter(filter)) };
+    } catch {
+      return { name, filter, error: true };
+    }
+  }),
+};
+
 mkdirSync(outDir, { recursive: true });
+writeFileSync(join(outDir, "filter.json"), `${JSON.stringify(filter, null, 2)}\n`, "utf-8");
 writeFileSync(join(outDir, "chunker.json"), `${JSON.stringify(chunker, null, 2)}\n`, "utf-8");
 writeFileSync(join(outDir, "hash.json"), `${JSON.stringify(hash, null, 2)}\n`, "utf-8");
 writeFileSync(join(outDir, "tokenizer.json"), `${JSON.stringify(tokenizer, null, 2)}\n`, "utf-8");

@@ -1,7 +1,9 @@
 #!/usr/bin/env node
+import { readFile } from "node:fs/promises";
 import { parseArgs } from "node:util";
 import { PACKAGE_VERSION } from "./constants.js";
 import { DocumentCollection } from "./core/collection.js";
+import type { RerankConfig, RerankProviderName } from "./retrieval/rerank.js";
 import type {
   EmbeddingProviderConfig,
   EmbeddingProviderName,
@@ -26,6 +28,10 @@ Usage:
   raglite mcp <path|url>              [--llm-provider P] [--llm-model M] [--llm-key K] [--mode M]
                              [--vector-provider P] [--vector-url U] [--vector-key K] [--vector-index I] [--vector-store-dir D]
                              MCP server over stdio (needs: npm install @modelcontextprotocol/sdk)
+  raglite eval <path|url> questions.jsonl   [--top-k N] [--modes vector,keyword,hybrid] [--json]
+                             [--rerank cohere|voyage|llm] [--rerank-model M] [--rerank-key K] [--llm-provider P]
+                             Scores retrieval: recall@k, MRR and hit rate per mode. Each line of the file is
+                             {"question": "...", "expected": ["text the passage contains", {"source": "a.pdf", "page": 3}]}
   raglite --help
   raglite --version
 
@@ -66,6 +72,8 @@ async function main(): Promise<void> {
       return runServe(rest);
     case "mcp":
       return runMcp(rest);
+    case "eval":
+      return runEval(rest);
     default:
       process.stderr.write(`Unknown command: ${command}\n\n${HELP}`);
       process.exit(2);
@@ -322,6 +330,60 @@ async function runMcp(args: string[]): Promise<void> {
   await collection.build();
   const { serveMcp } = await import("./mcp/server.js");
   await serveMcp(collection);
+}
+
+async function runEval(args: string[]): Promise<void> {
+  const { values, positionals } = parseArgs({
+    args,
+    allowPositionals: true,
+    options: {
+      "top-k": { type: "string" },
+      modes: { type: "string" },
+      rerank: { type: "string" },
+      "rerank-model": { type: "string" },
+      "rerank-key": { type: "string" },
+      json: { type: "boolean" },
+      "embed-provider": { type: "string" },
+      "embed-model": { type: "string" },
+      "embed-key": { type: "string" },
+      "llm-provider": { type: "string" },
+      "llm-model": { type: "string" },
+      "llm-key": { type: "string" },
+      ...COMMON_VECTOR_OPTIONS,
+    },
+  });
+  const pathOrUrl = requirePositional(positionals, 0, "path|url");
+  const file = requirePositional(positionals, 1, "questions.jsonl");
+  const modes = values.modes?.split(",").map((m) => m.trim());
+  for (const mode of modes ?? []) {
+    if (!MODES.has(mode)) {
+      throw new Error(`--modes takes vector, keyword and hybrid, comma-separated (got "${mode}")`);
+    }
+  }
+
+  const { evaluate, formatReport, parseQuestions } = await import("./eval.js");
+  const questions = parseQuestions(await readFile(file, "utf-8"));
+  const llm = parseLLM(values);
+  const collection = new DocumentCollection(pathOrUrl, {
+    ...embeddingOption(values),
+    ...(llm ? { llm } : {}),
+    ...storeOptions(values),
+  });
+  const rerank: RerankConfig | undefined = values.rerank
+    ? {
+        provider: values.rerank as RerankProviderName,
+        ...(values["rerank-model"] ? { model: values["rerank-model"] } : {}),
+        ...(values["rerank-key"] ? { apiKey: values["rerank-key"] } : {}),
+      }
+    : undefined;
+  const report = await evaluate(collection, questions, {
+    ...(values["top-k"] ? { topK: Number(values["top-k"]) } : {}),
+    ...(modes ? { modes: modes as RetrievalMode[] } : {}),
+    ...(rerank ? { rerank } : {}),
+  });
+  process.stdout.write(
+    values.json ? `${JSON.stringify(report, null, 2)}\n` : `${formatReport(report)}\n`,
+  );
 }
 
 function requirePositional(positionals: string[], index: number, name: string): string {

@@ -1,8 +1,12 @@
+export type { FilterCondition, FilterScalar, MetadataFilter } from "./filter.js";
+export { matchesFilter } from "./filter.js";
 export type { RankedList } from "./fusion.js";
 export { reciprocalRankFusion } from "./fusion.js";
 export type { KeywordHit, KeywordIndexFile } from "./keyword-index.js";
 export { KeywordIndex } from "./keyword-index.js";
 export type { RetrievalPlan } from "./plan.js";
 export { resolveRetrievalPlan } from "./plan.js";
+export type { RerankConfig, Reranker, RerankProviderName } from "./rerank.js";
+export { DEFAULT_RERANK_MODELS } from "./rerank.js";
 export type { RetrieveOptions } from "./retriever.js";
 export { Retriever } from "./retriever.js";

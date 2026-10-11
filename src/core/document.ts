@@ -25,6 +25,7 @@ import {
   streamAnswer,
 } from "../llm/index.js";
 import { type BaseLoader, getLoader, isUrl } from "../loaders/index.js";
+import { type MetadataFilter, matchesFilter, splitFilter } from "../retrieval/filter.js";
 import { type RankedList, reciprocalRankFusion } from "../retrieval/fusion.js";
 import {
   type KeywordHit,
@@ -34,6 +35,12 @@ import {
   writeKeywordFile,
 } from "../retrieval/keyword-index.js";
 import { type RetrievalPlan, resolveRetrievalPlan } from "../retrieval/plan.js";
+import {
+  type RerankConfig,
+  type Reranker,
+  rerankCandidates,
+  rerankHits,
+} from "../retrieval/rerank.js";
 import { Retriever } from "../retrieval/retriever.js";
 import { hasUnspacedText } from "../text/scripts.js";
 import { type SearchToolOptions, searchTool } from "../tools/search-tool.js";
@@ -80,6 +87,16 @@ export interface SearchOptions {
   /** Overrides the `retrieval.mode` default (which is "vector"). */
   mode?: RetrievalMode;
   hybrid?: HybridOptions;
+  /**
+   * Only chunks whose metadata matches: `source`, `page`, `pageEnd`,
+   * `section`, `chunk`, `totalChunks` and your own `metadata` fields.
+   */
+  filter?: MetadataFilter;
+  /**
+   * Reorders the first `rerank.candidates` results with a reranking model
+   * (or your function) before the topK cut. `false` turns off the default.
+   */
+  rerank?: RerankConfig | Reranker | false;
 }
 
 /** @internal Candidate lists of one document, before fusion. */
@@ -270,10 +287,7 @@ export class Document {
     }
     this.logger.info(`Produced ${chunks.length} chunk(s). Embedding...`);
 
-    const source =
-      this.inlineText !== undefined || isUrl(this.filePath)
-        ? this.filePath
-        : basename(this.filePath);
+    const source = this.source;
     const embedder = await createEmbedder(embeddingsConfig);
     // Batches so progress can be reported and a cancelled build stops early.
     const vectors: number[][] = [];
@@ -349,10 +363,23 @@ export class Document {
    * hybrid retrieval.
    */
   async search(query: string, options: SearchOptions = {}): Promise<SearchResult[]> {
+    const rerank = options.rerank ?? this.config.rerank;
+    if (!rerank) return this.retrieve(query, options);
+    const topK = options.topK ?? this.config.topK;
+    const hits = await this.retrieve(query, { ...options, topK: rerankCandidates(rerank, topK) });
+    return rerankHits(query, hits, rerank, topK, {
+      logger: this.logger,
+      ...(this.config.llm ? { llm: this.config.llm } : {}),
+    });
+  }
+
+  private async retrieve(query: string, options: SearchOptions): Promise<SearchResult[]> {
     const plan = this.retrievalPlan(options);
     if (plan.mode === "vector") {
       await this.ensureReady();
-      return this.vectorSearch(query, plan.topK, plan.scoreThreshold);
+      const chunkFilter = this.chunkFilter(plan.filter);
+      if (chunkFilter === null) return [];
+      return this.vectorSearch(query, plan.topK, plan.scoreThreshold, chunkFilter);
     }
     const { vector, keyword } = await this.retrieveCandidates(query, plan);
     if (keyword === null) return vector.slice(0, plan.topK);
@@ -370,6 +397,18 @@ export class Document {
   }
 
   /**
+   * Checks the document-level part of `filter` (source and custom metadata)
+   * and returns the per-chunk part for the store, or null when this
+   * document cannot match.
+   */
+  private chunkFilter(filter: MetadataFilter | undefined): MetadataFilter | undefined | null {
+    if (!filter) return undefined;
+    const { chunk, document } = splitFilter(filter);
+    const fields = { ...this.config.metadata, source: this.source };
+    return matchesFilter(fields, document) ? chunk : null;
+  }
+
+  /**
    * @internal The vector and keyword candidate lists for a keyword or hybrid
    * search, before fusion. DocumentCollection fuses these across documents.
    * Without a keyword index the vector list is returned for every mode, so
@@ -377,13 +416,16 @@ export class Document {
    */
   async retrieveCandidates(query: string, plan: RetrievalPlan): Promise<RetrievalCandidates> {
     await this.ensureReady();
-    const keyword = await this.keywordSearch(query, plan.candidates);
+    const chunkFilter = this.chunkFilter(plan.filter);
+    if (chunkFilter === null) return { vector: [], keyword: [] };
+    const keyword = await this.keywordSearch(query, plan.candidates, chunkFilter);
     const needVector = keyword === null || (plan.mode === "hybrid" && plan.weights.vector > 0);
     const vector = needVector
       ? await this.vectorSearch(
           query,
           keyword === null ? plan.topK : plan.candidates,
           plan.scoreThreshold,
+          chunkFilter,
         )
       : [];
     return { vector, keyword };
@@ -429,6 +471,13 @@ export class Document {
       systemHint: options.systemHint,
       ...(options.signal ? { signal: options.signal } : {}),
     });
+  }
+
+  /** The `source` of this document's chunks: the file name, URL or fromText id. */
+  get source(): string {
+    return this.inlineText !== undefined || isUrl(this.filePath)
+      ? this.filePath
+      : basename(this.filePath);
   }
 
   /** Number of chunks currently indexed. */
@@ -478,19 +527,47 @@ export class Document {
     query: string,
     topK: number,
     scoreThreshold: number,
+    filter: MetadataFilter | undefined,
   ): Promise<SearchResult[]> {
     const retriever = new Retriever(this.embedder!, this.store);
-    return retriever.retrieve(query, { topK, scoreThreshold });
+    const hits = await retriever.retrieve(query, {
+      topK,
+      scoreThreshold,
+      ...(filter ? { filter } : {}),
+    });
+    return this.finishHits(hits, filter);
   }
 
   /** BM25 (or the store's native) keyword search; null when no keyword index exists. */
-  private async keywordSearch(query: string, topK: number): Promise<KeywordHit[] | null> {
+  private async keywordSearch(
+    query: string,
+    topK: number,
+    filter: MetadataFilter | undefined,
+  ): Promise<KeywordHit[] | null> {
     if (this.store.keywordSearch) {
-      const hits = await this.store.keywordSearch(query, topK);
-      return hits.map(({ id, text, metadata, score }) => ({ id, text, metadata, score }));
+      const hits = filter
+        ? await this.store.keywordSearch(query, topK, filter)
+        : await this.store.keywordSearch(query, topK);
+      return this.finishHits(
+        hits.map(({ id, text, metadata, score }) => ({ id, text, metadata, score })),
+        filter,
+      );
     }
     const index = await this.loadKeywordIndex();
-    return index ? index.search(query, topK) : null;
+    return index ? this.finishHits(index.search(query, topK, filter), filter) : null;
+  }
+
+  /**
+   * Drops hits a custom store returned despite the filter, and adds the
+   * document's custom metadata to each hit.
+   */
+  private finishHits<T extends { metadata: ChunkMetadata }>(
+    hits: T[],
+    filter: MetadataFilter | undefined,
+  ): T[] {
+    const kept = filter ? hits.filter((h) => matchesFilter(h.metadata, filter)) : hits;
+    if (Object.keys(this.config.metadata).length === 0) return kept;
+    return kept.map((h) => ({ ...h, metadata: { ...h.metadata, ...this.config.metadata } }));
   }
 
   private async loadKeywordIndex(): Promise<KeywordIndex | null> {
@@ -636,6 +713,8 @@ export function searchOptionsOf(options: SearchOptions): SearchOptions {
   if (options.scoreThreshold !== undefined) out.scoreThreshold = options.scoreThreshold;
   if (options.mode !== undefined) out.mode = options.mode;
   if (options.hybrid !== undefined) out.hybrid = options.hybrid;
+  if (options.filter !== undefined) out.filter = options.filter;
+  if (options.rerank !== undefined) out.rerank = options.rerank;
   return out;
 }
 

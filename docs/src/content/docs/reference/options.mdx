@@ -20,6 +20,8 @@ Option names are the same in both SDKs: Python takes them as dict keys (`{"topK"
 | `topK` | `5` | Results returned by `search()` and passages given to `ask()` |
 | `scoreThreshold` | `0` | Minimum cosine similarity (0..1) |
 | `retrieval` | `{ mode: "vector" }` | Default `mode` and `hybrid` options. See [Hybrid search](/raglite/guides/hybrid-search/) |
+| `rerank` | none | Default reranker for `search()` and `ask()`. See [Reranking](/raglite/guides/reranking/) |
+| `metadata` | none | Your own fields, added to results and usable in `filter`. See [Metadata filters](/raglite/guides/filters/#your-own-metadata) |
 | `storeDir` | `".raglite"` | Where indexes are saved |
 | `vectorStore` | memory store | A provider config or a `VectorStore` instance. See [Vector stores](/raglite/guides/vector-stores/) |
 | `logLevel` | `"info"` | `"silent"`, `"info"` or `"debug"`. Logs go to stderr |
@@ -43,6 +45,8 @@ Option names are the same in both SDKs: Python takes them as dict keys (`{"topK"
 | `scoreThreshold` | `score_threshold` | Minimum cosine similarity |
 | `mode` | `mode` | `"vector"`, `"keyword"` or `"hybrid"` |
 | `hybrid` | `hybrid` | `{ rrfK?, candidates?, weights? }` |
+| `filter` | `filter` | Only chunks whose metadata matches. See [Metadata filters](/raglite/guides/filters/) |
+| `rerank` | `rerank` | `{ provider, model?, apiKey?, baseURL?, llm?, candidates? }`, a function, or `false`. See [Reranking](/raglite/guides/reranking/) |
 
 ## ask() and askStream()
 
@@ -61,10 +65,10 @@ All `search()` options, plus:
 | --- | --- |
 | `id` | Chunk id |
 | `text` | The chunk text |
-| `metadata` | `{ source, chunk, totalChunks, page?, pageEnd?, section? }` |
-| `score` | Cosine similarity (vector mode) or fused rank score 0..1 (keyword and hybrid) |
+| `metadata` | `{ source, chunk, totalChunks, page?, pageEnd?, section? }`, plus your own `metadata` fields |
+| `score` | Cosine similarity (vector mode), fused rank score 0..1 (keyword and hybrid), or the reranker's score |
 | `distance` | `1 - score` |
-| `scores` | Keyword and hybrid modes: `{ vector?, keyword?, fused? }` |
+| `scores` | Keyword and hybrid modes, and with `rerank`: `{ vector?, keyword?, fused?, rerank? }` |
 
 ## AnswerResult
 
@@ -145,8 +149,13 @@ import {
   searchTool,
   extractCitations,
   createEmbedder,
+  evaluate,
+  parseQuestions,
+  formatReport,
+  matchesFilter,
   DEFAULT_LLM_MODELS,
   DEFAULT_EMBEDDING_MODELS,
+  DEFAULT_RERANK_MODELS,
 } from "raglite-toolkit";
 ```
 
@@ -161,8 +170,13 @@ from raglite import (
     serve_mcp,
     extract_citations,
     create_embedder,
+    evaluate,
+    parse_questions,
+    format_report,
+    matches_filter,
     DEFAULT_LLM_MODELS,
     DEFAULT_EMBEDDING_MODELS,
+    DEFAULT_RERANK_MODELS,
 )
 ```
 

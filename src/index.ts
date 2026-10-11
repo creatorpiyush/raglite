@@ -47,6 +47,14 @@ export {
   VectorDBError,
 } from "./errors.js";
 export type {
+  EvalExpected,
+  EvalOptions,
+  EvalQuestion,
+  EvalReport,
+  EvalRow,
+} from "./eval.js";
+export { evaluate, formatReport, parseQuestions } from "./eval.js";
+export type {
   AnswerResult,
   Citation,
   GenerateAnswerOptions,
@@ -78,14 +86,22 @@ export {
 export type { McpServerOptions, McpTarget } from "./mcp/server.js";
 export { createMcpServer, serveMcp } from "./mcp/server.js";
 export type {
+  FilterCondition,
+  FilterScalar,
   KeywordHit,
   KeywordIndexFile,
+  MetadataFilter,
   RankedList,
+  RerankConfig,
+  Reranker,
+  RerankProviderName,
   RetrievalPlan,
   RetrieveOptions,
 } from "./retrieval/index.js";
 export {
+  DEFAULT_RERANK_MODELS,
   KeywordIndex,
+  matchesFilter,
   Retriever,
   reciprocalRankFusion,
   resolveRetrievalPlan,

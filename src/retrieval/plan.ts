@@ -1,6 +1,7 @@
 import { DEFAULT_RRF_K, MIN_HYBRID_CANDIDATES } from "../constants.js";
 import { ConfigError } from "../errors.js";
 import type { HybridOptions, RetrievalMode, RetrievalOptions } from "../types.js";
+import { type MetadataFilter, validateFilter } from "./filter.js";
 
 const MODES: ReadonlySet<string> = new Set(["vector", "keyword", "hybrid"]);
 
@@ -12,12 +13,13 @@ export interface RetrievalPlan {
   rrfK: number;
   candidates: number;
   weights: { vector: number; keyword: number };
+  filter?: MetadataFilter;
 }
 
 /** Merges per-call options over the configured defaults and validates the result. */
 export function resolveRetrievalPlan(
   defaults: RetrievalOptions,
-  call: { mode?: RetrievalMode; hybrid?: HybridOptions },
+  call: { mode?: RetrievalMode; hybrid?: HybridOptions; filter?: MetadataFilter },
   topK: number,
   scoreThreshold: number,
 ): RetrievalPlan {
@@ -43,5 +45,14 @@ export function resolveRetrievalPlan(
     throw new ConfigError("hybrid.weights must be non-negative and not both zero");
   }
   // Results can only come from the candidate lists, so never take fewer than topK.
-  return { mode, topK, scoreThreshold, rrfK, candidates: Math.max(candidates, topK), weights };
+  const plan: RetrievalPlan = {
+    mode,
+    topK,
+    scoreThreshold,
+    rrfK,
+    candidates: Math.max(candidates, topK),
+    weights,
+  };
+  if (call.filter !== undefined) plan.filter = validateFilter(call.filter);
+  return plan;
 }

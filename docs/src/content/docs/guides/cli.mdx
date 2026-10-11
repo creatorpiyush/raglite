@@ -36,6 +36,7 @@ raglite search ./docs "ERR_4021" --mode hybrid
 raglite ask ./docs "What is the refund policy?" --llm-provider anthropic --stream
 raglite serve ./docs --llm-provider openai --port 8085 --token "$RAGLITE_TOKEN"
 raglite mcp ./docs --store-dir "$PWD/.raglite"
+raglite eval ./docs questions.jsonl --rerank cohere
 ```
 
 ## Commands
@@ -87,6 +88,19 @@ Starts the [REST API](/raglite/guides/rest-api/) and runs until stopped.
 ### mcp
 
 Serves the [MCP server](/raglite/guides/mcp/) over stdio. Takes `--llm-provider`, `--llm-model` and `--llm-key` (which add the `ask` tool) and `--mode`. The TypeScript package needs `@modelcontextprotocol/sdk`; the Python package needs the `[mcp]` extra.
+
+### eval
+
+`raglite eval <path|url> questions.jsonl` scores retrieval on your questions: recall@k, MRR and hit rate for each mode. See [Evaluating retrieval](/raglite/guides/evaluation/).
+
+| Flag | Meaning |
+| --- | --- |
+| `--top-k N` | Results scored per question (default 5) |
+| `--modes M,M` | Modes to compare, comma-separated (default `vector,keyword,hybrid`) |
+| `--rerank P` | Also score each mode reranked by `cohere`, `voyage` or `llm` |
+| `--rerank-model M`, `--rerank-key K` | Reranking model and API key |
+| `--llm-provider P`, `--llm-model M`, `--llm-key K` | LLM for `--rerank llm` |
+| `--json` | Print the report as JSON |
 
 ## Flags on every command
 

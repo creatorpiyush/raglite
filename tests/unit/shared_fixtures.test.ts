@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { RecursiveChunker } from "../../src/chunking/index.js";
 import { chunkLocation, markdownHeadings, pageStarts } from "../../src/chunking/locations.js";
 import { extractCitations } from "../../src/llm/prompt.js";
+import { matchesFilter, validateFilter } from "../../src/retrieval/filter.js";
 import { type RankedList, reciprocalRankFusion } from "../../src/retrieval/fusion.js";
 import { KeywordIndex } from "../../src/retrieval/keyword-index.js";
 import { tokenize } from "../../src/text/tokenizer.js";
@@ -143,5 +144,21 @@ describe("shared fixtures: chunk locations", () => {
       distance: 0,
     }));
     expect(extractCitations(answer, context).map((c) => c.n)).toEqual(cited);
+  });
+});
+
+interface FilterFixture {
+  metadata: Record<string, unknown>;
+  cases: { name: string; filter: unknown; matches?: boolean; error?: boolean }[];
+}
+
+describe("shared fixtures: metadata filter", () => {
+  const fixture = load<FilterFixture>("filter.json");
+  it.each(fixture.cases)("$name", (c) => {
+    if (c.error) {
+      expect(() => validateFilter(c.filter)).toThrow();
+    } else {
+      expect(matchesFilter(fixture.metadata, validateFilter(c.filter))).toBe(c.matches);
+    }
   });
 });

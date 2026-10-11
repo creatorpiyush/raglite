@@ -4,6 +4,7 @@ import { dirname } from "node:path";
 import { TOKENIZER_NAME, tokenize } from "../text/tokenizer.js";
 import type { ChunkMetadata, IndexMetadata } from "../types.js";
 import type { IndexedChunk } from "../vectordb/base.js";
+import { type MetadataFilter, matchesFilter } from "./filter.js";
 
 export const KEYWORD_INDEX_FORMAT = 1;
 export const BM25_K1 = 1.2;
@@ -91,7 +92,7 @@ export class KeywordIndex {
   }
 
   /** Chunks matching any query term, best BM25 score first, ties broken by chunk id. */
-  search(query: string, topK: number): KeywordHit[] {
+  search(query: string, topK: number, filter?: MetadataFilter): KeywordHit[] {
     const n = this.chunks.length;
     if (n === 0 || topK <= 0) return [];
 
@@ -113,6 +114,7 @@ export class KeywordIndex {
     const hits: KeywordHit[] = [];
     for (const [index, score] of scores) {
       const chunk = this.chunks[index]!;
+      if (filter && !matchesFilter(chunk.metadata, filter)) continue;
       hits.push({ id: chunk.id, text: chunk.text, metadata: chunk.metadata, score });
     }
     hits.sort(byScoreThenId);

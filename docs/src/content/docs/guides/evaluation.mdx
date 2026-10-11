@@ -1,0 +1,103 @@
+---
+title: Evaluating retrieval
+description: Measure recall@k, MRR and hit rate on your own questions, and compare retrieval modes and rerankers.
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+Chunk size, retrieval mode and reranking all change which passages reach the LLM. `raglite eval` measures that on your own questions, so you can compare settings with numbers instead of guesses.
+
+## 1. Write the questions
+
+Make a JSONL file with one question per line. `expected` lists what a relevant result looks like:
+
+```json title="questions.jsonl"
+{"question": "How long do refunds take?", "expected": ["processed within 5 business days"]}
+{"question": "What does ERR_4021 mean?", "expected": ["gateway timed out"]}
+{"question": "What does the warranty cover?", "expected": [{"source": "policy.pdf", "page": 3}]}
+```
+
+| `expected` item | Matches a result when |
+| --- | --- |
+| A string | The passage contains it. Case and whitespace are ignored |
+| `{ "source": "policy.pdf" }` | The result comes from that document |
+| `{ "source": "policy.pdf", "page": 3 }` | It comes from that document and covers that page |
+| `{ "source": "notes.md", "chunk": 2 }` | It is that chunk |
+
+A question with several `expected` items counts the share of them found, so list every passage a full answer needs.
+
+## 2. Run it
+
+```bash
+raglite eval ./docs questions.jsonl --top-k 5
+```
+
+The output looks like this; the numbers depend on your documents and questions:
+
+```text
+3 questions, top 5
+
+mode      recall@5     MRR   hit rate
+vector       0.667   0.500      0.667
+keyword      1.000   0.833      1.000
+hybrid       1.000   1.000      1.000
+```
+
+Add `--rerank cohere` (or `voyage`, or `llm` with `--llm-provider`) to add a `+rerank` row for each mode. `--modes hybrid` scores one mode, and `--json` prints the report for scripts and CI. It takes the same `--store-dir`, `--embed-*` and vector store options as [`raglite search`](/raglite/guides/cli/).
+
+## The numbers
+
+All three are averages over the questions, from 0 to 1:
+
+| Metric | Meaning |
+| --- | --- |
+| `recall@k` | Share of each question's `expected` items found in the top `k` results |
+| `MRR` | Mean reciprocal rank: 1 when the first result is relevant, ½ when the second is, 0 when none of the top `k` are |
+| `hit rate` | Share of questions with at least one relevant result in the top `k` |
+
+In the JSON report each row also lists `missed`: the questions with no relevant result. Start there.
+
+## From code
+
+<Tabs syncKey="lang">
+<TabItem label="TypeScript">
+
+```ts
+import { readFile } from "node:fs/promises";
+import { DocumentCollection, evaluate, formatReport, parseQuestions } from "raglite-toolkit";
+
+const collection = new DocumentCollection("./docs");
+const questions = parseQuestions(await readFile("questions.jsonl", "utf-8"));
+
+const report = await evaluate(collection, questions, {
+  topK: 5,
+  modes: ["vector", "hybrid"],
+  rerank: { provider: "cohere" },
+});
+console.log(formatReport(report));
+```
+
+</TabItem>
+<TabItem label="Python">
+
+```python
+from raglite import DocumentCollection, evaluate, format_report, parse_questions
+
+collection = DocumentCollection("./docs")
+with open("questions.jsonl", encoding="utf-8") as f:
+    questions = parse_questions(f.read())
+
+report = evaluate(collection, questions, top_k=5, modes=["vector", "hybrid"], rerank={"provider": "cohere"})
+print(format_report(report))
+```
+
+</TabItem>
+</Tabs>
+
+`evaluate` takes a `DocumentCollection`, which builds itself, or a `Document` you have built, and an optional `filter`.
+
+## Tips
+
+- 20 to 50 questions that real users ask tell you more than hundreds of generated ones.
+- Change one setting at a time (chunk size, mode, reranker) and keep the questions fixed.
+- To fail a CI job when retrieval gets worse, run with `--json` and compare `recall` against a threshold.

@@ -1,4 +1,5 @@
 import { VectorDBError } from "../errors.js";
+import { filterConditions, type MetadataFilter } from "../retrieval/filter.js";
 import type {
   EmbeddingProviderName,
   IndexMetadata,
@@ -71,6 +72,10 @@ export class PineconeVectorStore implements VectorStore {
         source: c.metadata.source,
         chunk: c.metadata.chunk,
         totalChunks: c.metadata.totalChunks,
+        // Pinecone rejects null values, so leave unset locations out.
+        ...(c.metadata.page !== undefined ? { page: c.metadata.page } : {}),
+        ...(c.metadata.pageEnd !== undefined ? { pageEnd: c.metadata.pageEnd } : {}),
+        ...(c.metadata.section !== undefined ? { section: c.metadata.section } : {}),
       },
     }));
 
@@ -95,7 +100,11 @@ export class PineconeVectorStore implements VectorStore {
     }
   }
 
-  async search(embedding: number[], topK: number): Promise<VectorSearchHit[]> {
+  async search(
+    embedding: number[],
+    topK: number,
+    filter?: MetadataFilter,
+  ): Promise<VectorSearchHit[]> {
     try {
       const res = await fetch(`${this.url}/query`, {
         method: "POST",
@@ -105,6 +114,7 @@ export class PineconeVectorStore implements VectorStore {
           topK: topK + 1,
           includeMetadata: true,
           namespace: this.namespace,
+          ...(filter ? { filter: pineconeFilter(filter) } : {}),
         }),
       });
       if (res.status !== 200) {
@@ -119,6 +129,9 @@ export class PineconeVectorStore implements VectorStore {
             source?: string;
             chunk?: number;
             totalChunks?: number;
+            page?: number;
+            pageEnd?: number;
+            section?: string;
             isMetadata?: boolean;
           };
         }>;
@@ -134,6 +147,9 @@ export class PineconeVectorStore implements VectorStore {
             source: m.metadata?.source ?? "",
             chunk: m.metadata?.chunk ?? 1,
             totalChunks: m.metadata?.totalChunks ?? 1,
+            ...(m.metadata?.page !== undefined ? { page: m.metadata.page } : {}),
+            ...(m.metadata?.pageEnd !== undefined ? { pageEnd: m.metadata.pageEnd } : {}),
+            ...(m.metadata?.section !== undefined ? { section: m.metadata.section } : {}),
           },
           score: m.score,
           distance: 1 - m.score,
@@ -251,4 +267,13 @@ export class PineconeVectorStore implements VectorStore {
       return null;
     }
   }
+}
+
+/** Pinecone metadata filter for a chunk filter. */
+export function pineconeFilter(filter: MetadataFilter): Record<string, Record<string, unknown>> {
+  const out: Record<string, Record<string, unknown>> = {};
+  for (const [field, op, value] of filterConditions(filter)) {
+    out[field] = { ...out[field], [`$${op}`]: value };
+  }
+  return out;
 }
